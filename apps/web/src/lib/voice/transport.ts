@@ -22,6 +22,7 @@ export type ToolStatusEvent = {
 
 export type SessionNotice =
   | { type: "session_ended"; message: string }
+  | { type: "session_finishing"; message: string }
   | { type: "provider_warning"; message: string };
 
 export type Unsubscribe = () => void;

@@ -145,7 +145,13 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         }
       })
       .on(RoomEvent.ParticipantDisconnected, (participant) => {
-        if (!participant.isAgent || this.agentRequestedEnd || this.currentState === "disconnecting") return;
+        if (!participant.isAgent || this.currentState === "disconnecting") return;
+        if (this.agentRequestedEnd) {
+          this.room = undefined;
+          this.audioRoot.replaceChildren();
+          this.setState("idle");
+          return;
+        }
         this.emitNotice({
           type: "provider_warning",
           message: "Die Verbindung zu Vera wurde unterbrochen.",
@@ -166,6 +172,11 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         const notice = parseSessionNotice(payload);
         if (!notice) return;
         this.emitNotice({ type: notice.type, message: notice.message });
+        if (notice.type === "session_finishing") {
+          this.agentRequestedEnd = true;
+          this.setState("disconnecting");
+          return;
+        }
         if (notice.type === "session_ended") {
           this.agentRequestedEnd = true;
           void this.disconnect();
@@ -173,6 +184,11 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       })
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         this.audioRoot.replaceChildren();
+        if (this.agentRequestedEnd) {
+          this.room = undefined;
+          this.setState("idle");
+          return;
+        }
         if (
           !this.agentRequestedEnd &&
           this.currentState !== "disconnecting" &&

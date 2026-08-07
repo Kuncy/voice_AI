@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         idleTimeoutMs: Number(process.env.IDLE_TIMEOUT_MS ?? 60_000),
         maxTurns: Number(process.env.MAX_TURNS ?? 40),
         reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 60_000),
-        phase: 5,
+        phase: 6,
       },
     });
     conversationId = conversation.id;
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       agents: [
         new RoomAgentDispatch({
           agentName: env.LIVEKIT_AGENT_NAME,
-          metadata: JSON.stringify({ phase: 5, conversationId: conversation.id }),
+          metadata: JSON.stringify({ phase: 6, conversationId: conversation.id }),
         }),
       ],
     });

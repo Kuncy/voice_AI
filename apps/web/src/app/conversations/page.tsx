@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getWebEnv } from "@heyvera/config";
+import { readAgentSnapshotForHistory } from "@heyvera/core";
 import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function ConversationsPage() {
       <nav className="nav">
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/settings">Settings</Link>
-        <span className="phase-badge">Phase 4 · History</span>
+        <span className="phase-badge">Phase 6 · History</span>
       </nav>
       <section className="history-card">
         <p className="eyebrow">TECHNISCHE VERIFIKATION</p>
@@ -28,18 +29,22 @@ export default async function ConversationsPage() {
         <p className="history-intro">Persistierte Voice-Sessions, neueste zuerst.</p>
         <div className="history-table-wrap">
           <table className="history-table">
-            <thead><tr><th>Zeitpunkt</th><th>Agent</th><th>Status</th><th>Dauer</th><th>Fehlercode</th></tr></thead>
+            <thead><tr><th>Zeitpunkt</th><th>Agent</th><th>Status</th><th>Dauer</th><th>Fehlercode</th><th /></tr></thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.createdAt.toLocaleString("de-DE")}</td>
-                  <td>{row.agentName}</td>
-                  <td><span className={`status-pill status-${row.status.toLowerCase()}`}>{row.status}</span></td>
-                  <td>{duration(row.durationMs)}</td>
-                  <td>{row.failureCode ?? "–"}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && <tr><td className="history-empty" colSpan={5}>Noch keine Conversations gespeichert.</td></tr>}
+              {rows.map((row) => {
+                const agent = readAgentSnapshotForHistory(row.agentSnapshot);
+                return (
+                  <tr key={row.id}>
+                    <td><Link className="history-primary-link" href={`/conversations/${row.id}`}>{row.createdAt.toLocaleString("de-DE")}</Link></td>
+                    <td>{agent.supported ? agent.snapshot.name : "Unbekannter Snapshot"}</td>
+                    <td><span className={`status-pill status-${row.status.toLowerCase()}`}>{row.status}</span></td>
+                    <td>{duration(row.durationMs)}</td>
+                    <td>{row.failureCode ?? "–"}</td>
+                    <td><Link className="history-detail-link" href={`/conversations/${row.id}`}>Ansehen →</Link></td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && <tr><td className="history-empty" colSpan={6}>Noch keine Conversations gespeichert.</td></tr>}
             </tbody>
           </table>
         </div>

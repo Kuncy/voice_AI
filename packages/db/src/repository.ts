@@ -8,7 +8,7 @@ import {
   type DamageReportRepository,
   type FinalMessage,
 } from "@heyvera/core";
-import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { Database } from "./client";
 import { agents, conversations, damageReports, messages, toolCalls } from "./schema";
 
@@ -207,12 +207,73 @@ export class DrizzleConversationRepository implements ConversationRepository {
         durationMs: conversations.durationMs,
         status: conversations.status,
         failureCode: conversations.failureCode,
-        agentName: agents.name,
+        agentSnapshot: conversations.agentSnapshot,
       })
       .from(conversations)
-      .innerJoin(agents, eq(conversations.agentId, agents.id))
       .orderBy(desc(conversations.createdAt))
       .limit(limit);
+  }
+
+  public async getDetail(conversationId: string) {
+    const [conversation] = await this.db
+      .select({
+        id: conversations.id,
+        livekitRoomName: conversations.livekitRoomName,
+        status: conversations.status,
+        startedAt: conversations.startedAt,
+        endedAt: conversations.endedAt,
+        durationMs: conversations.durationMs,
+        failureCode: conversations.failureCode,
+        agentSnapshot: conversations.agentSnapshot,
+        runtimeSnapshot: conversations.runtimeSnapshot,
+        createdAt: conversations.createdAt,
+      })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    if (!conversation) return undefined;
+
+    const [savedMessages, savedToolCalls] = await Promise.all([
+      this.db
+        .select({
+          id: messages.id,
+          sequence: messages.sequence,
+          role: messages.role,
+          content: messages.content,
+          wasInterrupted: messages.wasInterrupted,
+          startedAt: messages.startedAt,
+          createdAt: messages.createdAt,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(asc(messages.sequence)),
+      this.db
+        .select({
+          id: toolCalls.id,
+          providerCallId: toolCalls.providerCallId,
+          toolName: toolCalls.toolName,
+          arguments: toolCalls.arguments,
+          result: toolCalls.result,
+          status: toolCalls.status,
+          errorCode: toolCalls.errorCode,
+          durationMs: toolCalls.durationMs,
+          createdAt: toolCalls.createdAt,
+          completedAt: toolCalls.completedAt,
+          damageReportId: damageReports.id,
+          damageCategory: damageReports.category,
+          damageDescription: damageReports.description,
+          damageUrgency: damageReports.urgency,
+          damageStatus: damageReports.status,
+          damageCreatedAt: damageReports.createdAt,
+        })
+        .from(toolCalls)
+        .leftJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
+        .where(eq(toolCalls.conversationId, conversationId))
+        .orderBy(asc(toolCalls.createdAt)),
+    ]);
+
+    return { conversation, messages: savedMessages, toolCalls: savedToolCalls };
   }
 
   public async abandonStale(cutoff: Date): Promise<number> {
