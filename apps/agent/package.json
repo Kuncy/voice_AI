@@ -7,6 +7,7 @@
     "build": "tsc --noEmit",
     "dev": "tsx src/main.ts dev",
     "start": "tsx src/main.ts start",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

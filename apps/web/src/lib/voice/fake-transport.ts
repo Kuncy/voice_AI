@@ -1,4 +1,5 @@
 import type {
+  SessionNotice,
   ToolStatusEvent,
   TranscriptEvent,
   Unsubscribe,
@@ -25,6 +26,10 @@ export class FakeVoiceTransport implements VoiceTransport {
   }
 
   public onTranscript(_callback: (event: TranscriptEvent) => void): Unsubscribe {
+    return () => undefined;
+  }
+
+  public onNotice(_callback: (event: SessionNotice) => void): Unsubscribe {
     return () => undefined;
   }
 

@@ -11,12 +11,14 @@ import {
   type TranscriptionSegment,
 } from "livekit-client";
 import type {
+  SessionNotice,
   ToolStatusEvent,
   TranscriptEvent,
   Unsubscribe,
   VoiceState,
   VoiceTransport,
 } from "./transport";
+import { mapAgentState, parseSessionNotice, sessionNoticeTopic } from "./session-events";
 
 type SessionResponse = { token: string; livekitUrl: string; roomName: string };
 
@@ -25,7 +27,9 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   private currentState: VoiceState = "idle";
   private readonly stateListeners = new Set<(state: VoiceState) => void>();
   private readonly transcriptListeners = new Set<(event: TranscriptEvent) => void>();
+  private readonly noticeListeners = new Set<(event: SessionNotice) => void>();
   private readonly toolListeners = new Set<(event: ToolStatusEvent) => void>();
+  private agentRequestedEnd = false;
 
   public constructor(private readonly audioRoot: HTMLElement) {}
 
@@ -36,6 +40,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   public async connect(): Promise<void> {
     if (this.room && this.room.state !== ConnectionState.Disconnected) return;
     this.setState("connecting");
+    this.agentRequestedEnd = false;
 
     try {
       const response = await fetch("/api/voice-sessions", { method: "POST" });
@@ -50,8 +55,12 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       await room.startAudio();
       await room.connect(session.livekitUrl, session.token);
       await room.localParticipant.setMicrophoneEnabled(true);
-      this.setState("listening");
+      const agent = [...room.remoteParticipants.values()].find((participant) => participant.isAgent);
+      if (!agent || !this.syncAgentState(agent)) this.setState("listening");
     } catch (error) {
+      await this.room?.disconnect().catch(() => undefined);
+      this.room = undefined;
+      this.audioRoot.replaceChildren();
       this.setState("error");
       throw error;
     }
@@ -73,6 +82,11 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   public onTranscript(callback: (event: TranscriptEvent) => void): Unsubscribe {
     this.transcriptListeners.add(callback);
     return () => this.transcriptListeners.delete(callback);
+  }
+
+  public onNotice(callback: (event: SessionNotice) => void): Unsubscribe {
+    this.noticeListeners.add(callback);
+    return () => this.noticeListeners.delete(callback);
   }
 
   public onToolStatus(callback: (event: ToolStatusEvent) => void): Unsubscribe {
@@ -115,17 +129,54 @@ export class LiveKitVoiceTransport implements VoiceTransport {
           }
         },
       )
-      .on(RoomEvent.ParticipantConnected, () => this.setState("listening"))
-      .on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-        const agentIsSpeaking = speakers.some((speaker) => speaker.isAgent);
-        this.setState(agentIsSpeaking ? "speaking" : "listening");
+      .on(RoomEvent.ParticipantConnected, (participant) => {
+        if (participant.isAgent) this.syncAgentState(participant);
+      })
+      .on(RoomEvent.ParticipantAttributesChanged, (changedAttributes, participant) => {
+        if (participant.isAgent && "lk.agent.state" in changedAttributes) {
+          this.syncAgentState(participant);
+        }
+      })
+      .on(RoomEvent.ParticipantDisconnected, (participant) => {
+        if (!participant.isAgent || this.agentRequestedEnd || this.currentState === "disconnecting") return;
+        this.emitNotice({
+          type: "provider_warning",
+          message: "Die Verbindung zu Vera wurde unterbrochen.",
+        });
+        this.agentRequestedEnd = true;
+        void this.disconnect();
+      })
+      .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+        if (topic !== sessionNoticeTopic || !participant?.isAgent) return;
+        const notice = parseSessionNotice(payload);
+        if (!notice) return;
+        this.emitNotice({ type: notice.type, message: notice.message });
+        if (notice.type === "session_ended") {
+          this.agentRequestedEnd = true;
+          void this.disconnect();
+        }
       })
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         this.audioRoot.replaceChildren();
-        if (this.currentState !== "disconnecting" && reason !== DisconnectReason.CLIENT_INITIATED) {
+        if (
+          !this.agentRequestedEnd &&
+          this.currentState !== "disconnecting" &&
+          reason !== DisconnectReason.CLIENT_INITIATED
+        ) {
           this.setState("error");
         }
       });
+  }
+
+  private syncAgentState(participant: Participant): boolean {
+    const state = mapAgentState(participant.attributes["lk.agent.state"]);
+    if (!state) return false;
+    this.setState(state);
+    return true;
+  }
+
+  private emitNotice(notice: SessionNotice): void {
+    for (const listener of this.noticeListeners) listener(notice);
   }
 
   private setState(state: VoiceState): void {
