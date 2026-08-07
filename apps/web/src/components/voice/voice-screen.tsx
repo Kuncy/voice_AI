@@ -77,6 +77,7 @@ export function VoiceScreen() {
         <span className="brand-mark">V</span>
         <span className="brand">HeyVera</span>
         <Link className="nav-link" href="/conversations">Conversations</Link>
+        <Link className="nav-link" href="/settings">Settings</Link>
         <span className="phase-badge">Voice Assistant</span>
       </nav>
 

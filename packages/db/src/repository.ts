@@ -1,9 +1,37 @@
-import type { ConversationRepository, ConversationTerminalUpdate, FinalMessage } from "@heyvera/core";
+import {
+  createAgentSnapshot,
+  agentSettingsSchema,
+  type AgentSettings,
+  type ConversationRepository,
+  type ConversationTerminalUpdate,
+  type FinalMessage,
+} from "@heyvera/core";
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { Database } from "./client";
 import { agents, conversations, messages } from "./schema";
 
 const nonTerminalStatuses = ["STARTING", "ACTIVE"] as const;
+
+export class DrizzleAgentRepository {
+  public constructor(private readonly db: Database) {}
+
+  public async get() {
+    const [agent] = await this.db.select().from(agents).orderBy(agents.createdAt).limit(1);
+    if (!agent) throw new Error("Vera agent seed is missing");
+    return agent;
+  }
+
+  public async update(settings: AgentSettings) {
+    const current = await this.get();
+    const [updated] = await this.db
+      .update(agents)
+      .set({ ...settings, updatedAt: new Date() })
+      .where(eq(agents.id, current.id))
+      .returning();
+    if (!updated) throw new Error("Vera agent update returned no row");
+    return updated;
+  }
+}
 
 export class DrizzleConversationRepository implements ConversationRepository {
   public constructor(private readonly db: Database) {}
@@ -15,25 +43,40 @@ export class DrizzleConversationRepository implements ConversationRepository {
     return this.db.transaction(async (tx) => {
       const [agent] = await tx.select().from(agents).orderBy(agents.createdAt).limit(1);
       if (!agent) throw new Error("Vera agent seed is missing");
+      const settings = agentSettingsSchema.parse({
+        name: agent.name,
+        tone: agent.tone,
+        systemPrompt: agent.systemPrompt,
+      });
       const [conversation] = await tx
         .insert(conversations)
         .values({
           agentId: agent.id,
           livekitRoomName: input.roomName,
-          agentSnapshot: {
+          agentSnapshot: createAgentSnapshot({
+            schemaVersion: 1,
             id: agent.id,
-            name: agent.name,
-            language: agent.language,
-            tone: agent.tone,
-            systemPrompt: agent.systemPrompt,
+            name: settings.name,
+            language: "de",
+            tone: settings.tone,
+            systemPrompt: settings.systemPrompt,
             ttsModel: agent.ttsModel,
-          },
+          }),
           runtimeSnapshot: input.runtimeSnapshot,
         })
         .returning({ id: conversations.id });
       if (!conversation) throw new Error("Conversation insert returned no row");
       return conversation;
     });
+  }
+
+  public async getAgentSnapshot(conversationId: string): Promise<unknown | undefined> {
+    const [row] = await this.db
+      .select({ agentSnapshot: conversations.agentSnapshot })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    return row?.agentSnapshot;
   }
 
   public async markActive(conversationId: string): Promise<void> {

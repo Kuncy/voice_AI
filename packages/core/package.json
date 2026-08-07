@@ -11,6 +11,9 @@
     "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
   "devDependencies": {
     "@types/node": "26.1.2",
     "tsx": "4.23.10",

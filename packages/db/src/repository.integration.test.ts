@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { DrizzleConversationRepository } from "./repository";
+import { DrizzleAgentRepository, DrizzleConversationRepository } from "./repository";
 import { conversations, messages } from "./schema";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -102,6 +102,46 @@ test("stale active conversations become abandoned", { skip: !databaseUrl }, asyn
     assert.ok((saved?.durationMs ?? 0) > 0);
   } finally {
     if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
+    await database.close();
+  }
+});
+
+test("new settings affect only new conversation snapshots", { skip: !databaseUrl }, async () => {
+  const database = createDatabase(databaseUrl!, { max: 2 });
+  const agentRepository = new DrizzleAgentRepository(database.db);
+  const conversationRepository = new DrizzleConversationRepository(database.db);
+  const original = await agentRepository.get();
+  const conversationIds: string[] = [];
+  try {
+    const before = await conversationRepository.create({
+      roomName: `snapshot-before-${crypto.randomUUID()}`,
+      runtimeSnapshot: { phase: 4, test: true },
+    });
+    conversationIds.push(before.id);
+    await agentRepository.update({
+      name: original.name,
+      tone: "Concise",
+      systemPrompt: "Du antwortest besonders knapp, klar und direkt auf die aktuelle Frage.",
+    });
+    const after = await conversationRepository.create({
+      roomName: `snapshot-after-${crypto.randomUUID()}`,
+      runtimeSnapshot: { phase: 4, test: true },
+    });
+    conversationIds.push(after.id);
+
+    const beforeSnapshot = await conversationRepository.getAgentSnapshot(before.id) as { tone?: unknown };
+    const afterSnapshot = await conversationRepository.getAgentSnapshot(after.id) as { tone?: unknown };
+    assert.equal(beforeSnapshot.tone, original.tone);
+    assert.equal(afterSnapshot.tone, "Concise");
+  } finally {
+    await agentRepository.update({
+      name: original.name,
+      tone: original.tone as "Friendly & Professional" | "Concise",
+      systemPrompt: original.systemPrompt,
+    });
+    for (const id of conversationIds) {
+      await database.db.delete(conversations).where(eq(conversations.id, id));
+    }
     await database.close();
   }
 });

@@ -1,6 +1,6 @@
 # HeyVera
 
-HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 3 persistiert den vollständigen Voice-Loop mit PostgreSQL und Drizzle: Conversations werden vor dem LiveKit-Connect angelegt, finale Nachrichten idempotent gespeichert und Session-Abschlüsse nachvollziehbar abgebildet.
+HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 4 ergänzt die persistente Agent-Konfiguration: Name, Tonalität und System-Prompt lassen sich unter `/settings` ändern. Jedes neue Gespräch erhält einen unveränderlichen Konfigurations-Snapshot, damit spätere Änderungen bereits laufende oder historische Gespräche nicht beeinflussen.
 
 Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das direkte Deepgram-Plugin für STT und TTS sowie das direkte OpenAI-Plugin für das LLM. Für Deepgram Flux STT und Aura‑2 TTS wird derselbe API-Key verwendet. LiveKit Inference und ElevenLabs sind im initialen Pfad bewusst nicht Bestandteil der Architektur, damit vorhandene Provider-Guthaben genutzt werden.
 
@@ -14,6 +14,7 @@ Voraussetzungen: Node.js 22+, pnpm 11, Docker und ein LiveKit-Cloud-Projekt.
 4. Für Prozesse auf dem Host in `.env.local` `DATABASE_URL=postgresql://heyvera:<passwort>@localhost:5433/heyvera` setzen; alternativ Web und Agent vollständig über Compose starten.
 5. Web und Agent gemeinsam mit `pnpm dev` starten.
 6. `http://localhost:3000` öffnen und den Mikrofonzugriff erlauben. Die technische Liste liegt unter `/conversations`.
+7. Unter `http://localhost:3000/settings` Vera konfigurieren. Änderungen gelten ab dem nächsten neu gestarteten Gespräch.
 
 Ohne echte Credentials kann die UI deterministisch über `http://localhost:3000/?voiceTransport=fake` geprüft werden.
 
@@ -63,3 +64,11 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 - Der Datenbank-Integrationstest prüft Lifecycle, Reihenfolge und Idempotenz der finalen Messages sowie den `ABANDONED`-Sweeper.
 - Partielle Transkripte bleiben ausschließlich im Browser; nur finale User- und Assistant-Items gelangen in PostgreSQL.
 - Der Agent fängt Persistenzfehler pro Schreibvorgang ab, protokolliert sie strukturiert und lässt die Voice-Pipeline weiterlaufen.
+
+## Phase-4-Verifikation
+
+- `/settings` lädt und speichert Name, Tonalität und System-Prompt serverseitig in PostgreSQL; Deutsch bleibt in dieser Phase fest eingestellt.
+- Zod validiert Formulareingaben und gespeicherte Snapshots. Nicht überschreibbare Sprach- und Sicherheitsregeln werden dem konfigurierbaren Prompt immer vorangestellt.
+- Ein neues Gespräch speichert die zu diesem Zeitpunkt aktive Agent-Konfiguration als versionierten Snapshot. Der Agent lädt genau diesen Snapshot für den Voice-Job.
+- Der Datenbank-Integrationstest belegt, dass eine Einstellungsänderung nur neue Gespräche betrifft.
+- `pnpm test`, `pnpm typecheck`, `pnpm build` sowie ein Container-Neustart prüfen Verhalten, Build und Persistenz.

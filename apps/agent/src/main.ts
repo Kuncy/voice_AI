@@ -1,8 +1,14 @@
 import { Agent, ServerOptions, cli, dedent, defineAgent, tts, voice } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
-import { getAgentEnv, initialVeraConfig } from "@heyvera/config";
-import { itemKey } from "@heyvera/core";
+import { getAgentEnv } from "@heyvera/config";
+import {
+  composeAgentInstructions,
+  fallbackAgentSnapshot,
+  itemKey,
+  readAgentSnapshot,
+  type AgentSnapshotV1,
+} from "@heyvera/core";
 import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
@@ -21,15 +27,9 @@ const endMessages: Record<SessionEndReason, string> = {
   max_turns: "Die maximale Anzahl an Gesprächsrunden wurde erreicht.",
 };
 
-function createVeraAgent() {
+function createVeraAgent(snapshot: AgentSnapshotV1) {
   return Agent.create({
-    instructions: dedent`
-      Du bist ${initialVeraConfig.name}, eine freundliche und professionelle deutschsprachige Sprachassistentin.
-
-      Antworte ausschließlich auf Deutsch, kurz und natürlich. Verwende ein bis drei Sätze und stelle immer nur eine Frage gleichzeitig.
-      Deine Antworten werden vorgelesen: Nutze nur Klartext, kein Markdown, keine Aufzählungszeichen, keine Emojis und keine technischen Interna.
-      Wenn du etwas nicht sicher weißt, sage das offen. In dieser ersten Voice-Phase führst du noch keine externen Aktionen aus.
-    `,
+    instructions: dedent`${composeAgentInstructions(snapshot)}`,
   });
 }
 
@@ -43,10 +43,19 @@ export default defineAgent({
       }
     })();
     const conversationId = typeof metadata.conversationId === "string" ? metadata.conversationId : undefined;
+    let agentSnapshot = fallbackAgentSnapshot;
+    if (conversationId) {
+      try {
+        agentSnapshot = readAgentSnapshot(await conversations.getAgentSnapshot(conversationId));
+      } catch (error) {
+        console.error("agent_snapshot_load_failed", { conversationId, error });
+      }
+    }
     console.info("agent_job_received", {
       room: context.room.name,
-      agent: initialVeraConfig.name,
-      phase: 3,
+      agent: agentSnapshot.name,
+      tone: agentSnapshot.tone,
+      phase: 4,
       conversationId,
     });
 
@@ -81,7 +90,7 @@ export default defineAgent({
         ttsInstances: [
           new deepgram.TTS({
             apiKey: env.DEEPGRAM_API_KEY,
-            model: env.DEEPGRAM_TTS_MODEL,
+            model: agentSnapshot.ttsModel ?? env.DEEPGRAM_TTS_MODEL,
           }),
           new deepgram.TTS({
             apiKey: env.DEEPGRAM_API_KEY,
@@ -273,7 +282,7 @@ export default defineAgent({
     });
 
     await session.start({
-      agent: createVeraAgent(),
+      agent: createVeraAgent(agentSnapshot),
       room: context.room,
     });
     await context.connect();
@@ -282,7 +291,7 @@ export default defineAgent({
       room: context.room.name,
       stt: env.DEEPGRAM_STT_MODEL,
       llm: env.OPENAI_MODEL,
-      tts: env.DEEPGRAM_TTS_MODEL,
+      tts: agentSnapshot.ttsModel ?? env.DEEPGRAM_TTS_MODEL,
       ttsFallback: env.DEEPGRAM_TTS_FALLBACK_MODEL,
     });
     guardrails.start();
