@@ -15,6 +15,10 @@ export class FakeVoiceTransport implements VoiceTransport {
     return this.currentState;
   }
 
+  public get canReconnect(): boolean {
+    return false;
+  }
+
   public async connect(): Promise<void> {
     this.setState("connecting");
     this.setState("listening");

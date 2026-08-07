@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { FakeVoiceTransport } from "@/lib/voice/fake-transport";
 import { LiveKitVoiceTransport } from "@/lib/voice/livekit-transport";
 import type { ToolStatusEvent, TranscriptEvent, VoiceState, VoiceTransport } from "@/lib/voice/transport";
+import { reconcileTranscript } from "@/lib/voice/transcript-reducer";
 
 const labels: Record<VoiceState, string> = {
   idle: "Bereit",
@@ -37,10 +38,7 @@ export function VoiceScreen() {
     transport.current = instance;
     const unsubscribeState = instance.onStateChange(setState);
     const unsubscribeTranscript = instance.onTranscript((event) => {
-      setTranscripts((current) => {
-        const withoutPrevious = current.filter((entry) => entry.id !== event.id);
-        return [...withoutPrevious, event];
-      });
+      setTranscripts((current) => reconcileTranscript(current, event));
     });
     const unsubscribeNotice = instance.onNotice((event) => {
       setNotice(event.message);
@@ -62,7 +60,7 @@ export function VoiceScreen() {
     setToolStatus(undefined);
     try {
       if (state === "idle" || state === "error") {
-        setTranscripts([]);
+        if (!transport.current?.canReconnect) setTranscripts([]);
         await transport.current?.connect();
       } else {
         await transport.current?.disconnect();
@@ -74,6 +72,7 @@ export function VoiceScreen() {
 
   const isRunning = !["idle", "error"].includes(state);
   const isBusy = state === "connecting" || state === "disconnecting";
+  const canReconnect = state === "error" && Boolean(transport.current?.canReconnect);
 
   return (
     <main className="voice-shell">
@@ -98,7 +97,7 @@ export function VoiceScreen() {
 
         <button className={isRunning ? "call-button stop" : "call-button"} onClick={toggleCall} disabled={isBusy}>
           <span className="button-icon">{isRunning ? "■" : "●"}</span>
-          {isRunning ? "Gespräch beenden" : "Gespräch starten"}
+          {isRunning ? "Gespräch beenden" : canReconnect ? "Verbindung wiederherstellen" : "Gespräch starten"}
         </button>
 
         {error && <p className="error-message">{error}</p>}
