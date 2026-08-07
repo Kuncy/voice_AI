@@ -24,6 +24,8 @@ Speichert eine bestätigte Schadensmeldung.
 Rufe dieses Tool erst auf, wenn der Name der meldenden Person, Kategorie, konkrete Beschreibung, Dringlichkeit, Straße mit Hausnummer,
 fünfstellige Postleitzahl und Ort des betroffenen Objekts vollständig sind,
 du alles kurz zusammengefasst hast und der Nutzer diese Zusammenfassung ausdrücklich bestätigt hat.
+Leite die Dringlichkeit aus den geschilderten Fakten ab; verlange vom Nutzer keine Auswahl einer Dringlichkeitsstufe.
+Terminwünsche, Nebenkostenfragen und sonstige Verwaltungsanliegen sind keine Schadensmeldungen.
 Das Tool löst keinen Notruf und keine automatische Weiterleitung aus.
 `,
     parameters: createDamageReportInputSchema,
