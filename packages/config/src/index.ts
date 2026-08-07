@@ -18,6 +18,7 @@ const agentEnvSchema = liveKitEnvSchema.extend({
   OPENAI_API_KEY: z.string().min(1),
   DEEPGRAM_STT_MODEL: z.string().min(1).default("flux-general-multi"),
   DEEPGRAM_TTS_MODEL: z.string().min(1).default("aura-2-viktoria-de"),
+  DEEPGRAM_TTS_FALLBACK_MODEL: z.string().min(1).default("aura-2-elara-de"),
   OPENAI_MODEL: z.string().min(1).default("gpt-4.1"),
   MAX_SESSION_MS: z.coerce.number().int().positive().default(600_000),
   IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),

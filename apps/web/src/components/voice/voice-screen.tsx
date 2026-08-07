@@ -22,6 +22,7 @@ export function VoiceScreen() {
   const [state, setState] = useState<VoiceState>("idle");
   const [transcripts, setTranscripts] = useState<TranscriptEvent[]>([]);
   const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
 
   useEffect(() => {
     if (!audioRoot.current) return;
@@ -39,9 +40,13 @@ export function VoiceScreen() {
         return [...withoutPrevious, event];
       });
     });
+    const unsubscribeNotice = instance.onNotice((event) => {
+      setNotice(event.message);
+    });
     return () => {
       unsubscribeState();
       unsubscribeTranscript();
+      unsubscribeNotice();
       void instance.disconnect();
       transport.current = null;
     };
@@ -49,6 +54,7 @@ export function VoiceScreen() {
 
   async function toggleCall() {
     setError(undefined);
+    setNotice(undefined);
     try {
       if (state === "idle" || state === "error") {
         setTranscripts([]);
@@ -88,6 +94,7 @@ export function VoiceScreen() {
         </button>
 
         {error && <p className="error-message">{error}</p>}
+        {notice && <p className="notice-message">{notice}</p>}
 
         <div className="transcript-panel">
           <div className="panel-heading">

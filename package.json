@@ -12,6 +12,7 @@
     "dev:web": "pnpm --filter @heyvera/web dev",
     "dev:agent": "pnpm --filter @heyvera/agent dev",
     "start": "turbo start",
+    "test": "turbo test",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {

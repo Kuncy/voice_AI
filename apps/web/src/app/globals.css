@@ -97,6 +97,7 @@ h1 { margin: 12px 0 8px; font-size: clamp(42px, 7vw, 68px); letter-spacing: -.05
 .button-icon { font-size: 10px; margin-right: 10px; color: #8068ef; }
 .stop .button-icon { color: #ff716b; }
 .error-message { max-width: 520px; margin: 20px auto 0; color: #ff9e99; }
+.notice-message { max-width: 520px; margin: 20px auto 0; color: #bdf78f; }
 
 .transcript-panel {
   margin-top: 54px;

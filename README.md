@@ -1,6 +1,6 @@
 # HeyVera
 
-HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 1 stellt die sichere Browser-zu-Room-Verbindung, den benannten Agent-Dispatch und das Coolify-fähige Deployment-Grundgerüst bereit.
+HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 2 ergänzt den vollständigen deutschen Voice-Loop um Session-Guardrails, echte Agent-Zustände, Latenzmetriken, Barge-in und verständliche Fehlerzustände.
 
 Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das direkte Deepgram-Plugin für STT und TTS sowie das direkte OpenAI-Plugin für das LLM. Für Deepgram Flux STT und Aura‑2 TTS wird derselbe API-Key verwendet. LiveKit Inference und ElevenLabs sind im initialen Pfad bewusst nicht Bestandteil der Architektur, damit vorhandene Provider-Guthaben genutzt werden.
 
@@ -36,3 +36,13 @@ Die Compose-Datei verwendet Coolifys unterstützte `${VARIABLE:?}`-Syntax für e
 - `docker compose config` mit gesetzten Pflichtvariablen
 - `GET /api/health`
 - Manueller Smoke-Test: Browser verbindet sich, Mikrofontrack wird publiziert und der Agent erscheint in derselben Room.
+
+## Phase-2-Verifikation
+
+- `pnpm test` prüft Max-Dauer, Idle-Timeout, Max-Turns, Agent-State-Mapping und Session-Nachrichten.
+- `pnpm typecheck` und `pnpm build` prüfen alle Workspace-Pakete.
+- Der manuelle Voice-Gate besteht aus zwei aufeinanderfolgenden deutschen Turns, hörbarer Antwort und Live-Transkript.
+- Strukturierte Logs `agent_voice_latency`, `agent_eou_metrics`, `agent_llm_metrics` und `agent_tts_metrics` machen die Zeit bis zum ersten Audio und die Provider-Latenzen messbar.
+- `agent_barge_in_detected` weist eine erkannte Unterbrechung nach.
+
+Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden dem Browser vor dem Disconnect zuverlässig übermittelt. Aura‑2 Viktoria ist die primäre Stimme; Aura‑2 Elara dient als automatischer Qualitäts-Fallback.

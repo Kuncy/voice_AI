@@ -20,6 +20,10 @@ export type ToolStatusEvent = {
   status: "started" | "succeeded" | "failed";
 };
 
+export type SessionNotice =
+  | { type: "session_ended"; message: string }
+  | { type: "provider_warning"; message: string };
+
 export type Unsubscribe = () => void;
 
 export interface VoiceTransport {
@@ -27,6 +31,7 @@ export interface VoiceTransport {
   disconnect(): Promise<void>;
   readonly state: VoiceState;
   onTranscript(callback: (event: TranscriptEvent) => void): Unsubscribe;
+  onNotice(callback: (event: SessionNotice) => void): Unsubscribe;
   onToolStatus(callback: (event: ToolStatusEvent) => void): Unsubscribe;
   onStateChange(callback: (state: VoiceState) => void): Unsubscribe;
 }

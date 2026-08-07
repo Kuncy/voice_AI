@@ -1,5 +1,21 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "LIVEKIT_URL",
+    "LIVEKIT_API_KEY",
+    "LIVEKIT_API_SECRET",
+    "LIVEKIT_AGENT_NAME",
+    "SESSION_SECRET",
+    "DEEPGRAM_API_KEY",
+    "DEEPGRAM_STT_MODEL",
+    "DEEPGRAM_TTS_MODEL",
+    "DEEPGRAM_TTS_FALLBACK_MODEL",
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "MAX_SESSION_MS",
+    "IDLE_TIMEOUT_MS",
+    "MAX_TURNS"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,6 +28,10 @@
     "start": {
       "cache": false,
       "persistent": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],
