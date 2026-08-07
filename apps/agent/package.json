@@ -1,0 +1,24 @@
+{
+  "name": "@heyvera/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "tsx src/main.ts dev",
+    "start": "tsx src/main.ts start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@heyvera/config": "workspace:*",
+    "@livekit/agents": "1.6.2",
+    "@livekit/agents-plugin-deepgram": "1.6.2",
+    "@livekit/agents-plugin-openai": "1.6.2",
+    "dotenv": "17.4.1",
+    "tsx": "4.23.10"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "typescript": "5.9.3"
+  }
+}
