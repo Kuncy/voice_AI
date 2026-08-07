@@ -19,7 +19,8 @@ export default async function ConversationsPage() {
     <main className="history-shell">
       <nav className="nav">
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
-        <span className="phase-badge">Phase 3 · Persistence</span>
+        <Link className="nav-link" href="/settings">Settings</Link>
+        <span className="phase-badge">Phase 4 · History</span>
       </nav>
       <section className="history-card">
         <p className="eyebrow">TECHNISCHE VERIFIKATION</p>
