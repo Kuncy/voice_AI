@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mapAgentState, parseSessionNotice } from "./session-events";
+import { mapAgentState, parseSessionNotice, parseToolStatus } from "./session-events";
 
 test("maps LiveKit agent states to UI states", () => {
   assert.equal(mapAgentState("initializing"), "connecting");
@@ -29,4 +29,17 @@ test("accepts valid session notices and rejects malformed data", () => {
     parseSessionNotice(encoder.encode(JSON.stringify({ type: "session_ended", reason: "other" }))),
     undefined,
   );
+});
+
+test("accepts only known damage-report tool status events", () => {
+  const encoder = new TextEncoder();
+  assert.deepEqual(
+    parseToolStatus(encoder.encode(JSON.stringify({ name: "create_damage_report", status: "started" }))),
+    { name: "create_damage_report", status: "started" },
+  );
+  assert.equal(
+    parseToolStatus(encoder.encode(JSON.stringify({ name: "delete_everything", status: "succeeded" }))),
+    undefined,
+  );
+  assert.equal(parseToolStatus(encoder.encode("not json")), undefined);
 });

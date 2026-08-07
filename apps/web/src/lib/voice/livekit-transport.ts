@@ -18,7 +18,13 @@ import type {
   VoiceState,
   VoiceTransport,
 } from "./transport";
-import { mapAgentState, parseSessionNotice, sessionNoticeTopic } from "./session-events";
+import {
+  mapAgentState,
+  parseSessionNotice,
+  parseToolStatus,
+  sessionNoticeTopic,
+  toolStatusTopic,
+} from "./session-events";
 
 type SessionResponse = { token: string; livekitUrl: string; roomName: string };
 
@@ -148,7 +154,15 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         void this.disconnect();
       })
       .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
-        if (topic !== sessionNoticeTopic || !participant?.isAgent) return;
+        if (!participant?.isAgent) return;
+        if (topic === toolStatusTopic) {
+          const toolStatus = parseToolStatus(payload);
+          if (!toolStatus) return;
+          for (const listener of this.toolListeners) listener(toolStatus);
+          this.setState(toolStatus.status === "started" ? "tool" : "thinking");
+          return;
+        }
+        if (topic !== sessionNoticeTopic) return;
         const notice = parseSessionNotice(payload);
         if (!notice) return;
         this.emitNotice({ type: notice.type, message: notice.message });

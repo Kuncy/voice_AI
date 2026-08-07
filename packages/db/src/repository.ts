@@ -4,11 +4,13 @@ import {
   type AgentSettings,
   type ConversationRepository,
   type ConversationTerminalUpdate,
+  type CreateDamageReportInput,
+  type DamageReportRepository,
   type FinalMessage,
 } from "@heyvera/core";
 import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
 import type { Database } from "./client";
-import { agents, conversations, messages } from "./schema";
+import { agents, conversations, damageReports, messages, toolCalls } from "./schema";
 
 const nonTerminalStatuses = ["STARTING", "ACTIVE"] as const;
 
@@ -30,6 +32,71 @@ export class DrizzleAgentRepository {
       .returning();
     if (!updated) throw new Error("Vera agent update returned no row");
     return updated;
+  }
+}
+
+export class DrizzleDamageReportRepository implements DamageReportRepository {
+  public constructor(private readonly db: Database) {}
+
+  public async create(input: {
+    conversationId: string;
+    providerCallId: string;
+    report: CreateDamageReportInput;
+  }): Promise<{ damageReportId: string; status: "open" }> {
+    return this.db.transaction(async (tx) => {
+      const startedAt = new Date();
+      const [insertedCall] = await tx
+        .insert(toolCalls)
+        .values({
+          conversationId: input.conversationId,
+          providerCallId: input.providerCallId,
+          toolName: "create_damage_report",
+          arguments: input.report,
+        })
+        .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
+        .returning({ id: toolCalls.id });
+
+      if (!insertedCall) {
+        const [existing] = await tx
+          .select({ damageReportId: damageReports.id, status: damageReports.status })
+          .from(toolCalls)
+          .innerJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
+          .where(and(
+            eq(toolCalls.conversationId, input.conversationId),
+            eq(toolCalls.providerCallId, input.providerCallId),
+          ))
+          .limit(1);
+        if (!existing || existing.status !== "OPEN") {
+          throw new Error("Existing damage report tool call has no open report");
+        }
+        return { damageReportId: existing.damageReportId, status: "open" };
+      }
+
+      const [report] = await tx
+        .insert(damageReports)
+        .values({
+          conversationId: input.conversationId,
+          toolCallId: insertedCall.id,
+          category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
+          description: input.report.description,
+          urgency: input.report.urgency.toUpperCase() as Uppercase<CreateDamageReportInput["urgency"]>,
+        })
+        .returning({ id: damageReports.id });
+      if (!report) throw new Error("Damage report insert returned no row");
+
+      const result = { ok: true, damageReportId: report.id, status: "open" as const };
+      const completedAt = new Date();
+      await tx
+        .update(toolCalls)
+        .set({
+          result,
+          status: "SUCCEEDED",
+          durationMs: completedAt.getTime() - startedAt.getTime(),
+          completedAt,
+        })
+        .where(eq(toolCalls.id, insertedCall.id));
+      return { damageReportId: report.id, status: "open" };
+    });
   }
 }
 

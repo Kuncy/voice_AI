@@ -20,6 +20,10 @@ export const conversationStatus = pgEnum("conversation_status", [
   "ABANDONED",
 ]);
 export const messageRole = pgEnum("message_role", ["USER", "ASSISTANT", "SYSTEM", "TOOL"]);
+export const toolCallStatus = pgEnum("tool_call_status", ["STARTED", "SUCCEEDED", "FAILED"]);
+export const damageCategory = pgEnum("damage_category", ["HEATING", "WATER", "ELECTRICITY", "STRUCTURAL", "OTHER"]);
+export const damageUrgency = pgEnum("damage_urgency", ["LOW", "MEDIUM", "HIGH", "EMERGENCY"]);
+export const damageReportStatus = pgEnum("damage_report_status", ["OPEN", "IN_REVIEW", "RESOLVED"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -78,11 +82,54 @@ export const messages = pgTable(
   ],
 );
 
+export const toolCalls = pgTable(
+  "tool_calls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
+    providerCallId: text("provider_call_id").notNull(),
+    toolName: text("tool_name").notNull(),
+    arguments: jsonb("arguments").notNull(),
+    result: jsonb("result"),
+    status: toolCallStatus("status").notNull().default("STARTED"),
+    errorCode: text("error_code"),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("tool_calls_conversation_provider_call_unique").on(table.conversationId, table.providerCallId),
+  ],
+);
+
+export const damageReports = pgTable("damage_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  category: damageCategory("category").notNull(),
+  description: text("description").notNull(),
+  urgency: damageUrgency("urgency").notNull(),
+  status: damageReportStatus("status").notNull().default("OPEN"),
+  ...timestamps,
+});
+
 export const agentRelations = relations(agents, ({ many }) => ({ conversations: many(conversations) }));
 export const conversationRelations = relations(conversations, ({ one, many }) => ({
   agent: one(agents, { fields: [conversations.agentId], references: [agents.id] }),
   messages: many(messages),
+  toolCalls: many(toolCalls),
+  damageReports: many(damageReports),
 }));
 export const messageRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
+}));
+export const toolCallRelations = relations(toolCalls, ({ one }) => ({
+  conversation: one(conversations, { fields: [toolCalls.conversationId], references: [conversations.id] }),
+  message: one(messages, { fields: [toolCalls.messageId], references: [messages.id] }),
+  damageReport: one(damageReports),
+}));
+export const damageReportRelations = relations(damageReports, ({ one }) => ({
+  conversation: one(conversations, { fields: [damageReports.conversationId], references: [conversations.id] }),
+  toolCall: one(toolCalls, { fields: [damageReports.toolCallId], references: [toolCalls.id] }),
 }));

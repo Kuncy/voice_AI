@@ -1,6 +1,6 @@
 # HeyVera
 
-HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 4 ergänzt die persistente Agent-Konfiguration: Name, Tonalität und System-Prompt lassen sich unter `/settings` ändern. Jedes neue Gespräch erhält einen unveränderlichen Konfigurations-Snapshot, damit spätere Änderungen bereits laufende oder historische Gespräche nicht beeinflussen.
+HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 5 ergänzt mit `create_damage_report` die erste persistente Business-Aktion: Vera sammelt Kategorie, Beschreibung und Dringlichkeit, bittet um Bestätigung und speichert anschließend genau eine Schadensmeldung. Agent-Einstellungen bleiben persistent und jedes Gespräch verwendet weiterhin einen unveränderlichen Konfigurations-Snapshot.
 
 Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das direkte Deepgram-Plugin für STT und TTS sowie das direkte OpenAI-Plugin für das LLM. Für Deepgram Flux STT und Aura‑2 TTS wird derselbe API-Key verwendet. LiveKit Inference und ElevenLabs sind im initialen Pfad bewusst nicht Bestandteil der Architektur, damit vorhandene Provider-Guthaben genutzt werden.
 
@@ -30,6 +30,8 @@ Das Repository wird als Docker-Compose-Service-Stack deployt. In Coolify:
 6. Für Production ein eigenes LiveKit-Projekt verwenden. Preview- und lokale Worker dürfen nicht dieselben Credentials verwenden.
 
 Der Agent ist ein langlebiger Worker und keine serverless Function. Er öffnet ausgehend eine WebSocket-Verbindung zu LiveKit Cloud. `stop_grace_period: 11m` gibt laufenden Calls beim Deployment Zeit zum sauberen Abschluss.
+
+`EMERGENCY` ist ausschließlich eine Dringlichkeitsstufe im gespeicherten Damage Report. HeyVera löst keinen Notruf aus und leitet keine Meldung automatisch weiter. Bei akuter Gefahr weist Vera zuerst auf das Verlassen des Gebäudes und den Notruf 112 hin; die Meldung ersetzt diesen Notruf nicht.
 
 Die Compose-Datei verwendet Coolifys unterstützte `${VARIABLE:?}`-Syntax, Healthchecks und `exclude_from_hc` für den einmaligen Migrationsjob. Da `exclude_from_hc` eine Coolify-Erweiterung und kein Docker-Compose-Standardfeld ist, entfernt `scripts/compose-local.sh` ausschließlich dieses Feld für lokale Compose-Aufrufe. `docker-compose.local.yml` veröffentlicht lokal Web-Port 3000 und PostgreSQL-Port 5433; in Coolify bleiben beide privaten Services unveröffentlicht.
 
@@ -72,3 +74,11 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 - Ein neues Gespräch speichert die zu diesem Zeitpunkt aktive Agent-Konfiguration als versionierten Snapshot. Der Agent lädt genau diesen Snapshot für den Voice-Job.
 - Der Datenbank-Integrationstest belegt, dass eine Einstellungsänderung nur neue Gespräche betrifft.
 - `pnpm test`, `pnpm typecheck`, `pnpm build` sowie ein Container-Neustart prüfen Verhalten, Build und Persistenz.
+
+## Phase-5-Verifikation
+
+- `create_damage_report` verlangt Kategorie, konkrete Beschreibung und Dringlichkeit und darf erst nach ausdrücklicher Bestätigung aufgerufen werden.
+- `providerCallId` schützt den Schreibpfad gegen Wiederholungen. Tool Call und Damage Report werden gemeinsam in einer PostgreSQL-Transaktion gespeichert.
+- Das Tool liefert ausschließlich strukturierte Erfolgs- oder Fehlercodes; Vera bestätigt Erfolg erst nach einem erfolgreichen Commit.
+- Der Live-Status wird über `heyvera.tool-status` im Voice Screen als eigenes Badge angezeigt.
+- Unit-Tests prüfen Validierung, stabile Results und Toolstatus. Der echte PostgreSQL-Integrationstest prüft Transaktion, Relation und Idempotenz.
