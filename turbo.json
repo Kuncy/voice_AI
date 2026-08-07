@@ -6,6 +6,10 @@
     "LIVEKIT_API_SECRET",
     "LIVEKIT_AGENT_NAME",
     "SESSION_SECRET",
+    "DATABASE_URL",
+    "POSTGRES_DB",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
     "DEEPGRAM_API_KEY",
     "DEEPGRAM_STT_MODEL",
     "DEEPGRAM_TTS_MODEL",
@@ -14,7 +18,8 @@
     "OPENAI_MODEL",
     "MAX_SESSION_MS",
     "IDLE_TIMEOUT_MS",
-    "MAX_TURNS"
+    "MAX_TURNS",
+    "RECONNECT_GRACE_MS"
   ],
   "tasks": {
     "build": {

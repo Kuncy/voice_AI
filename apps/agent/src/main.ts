@@ -2,6 +2,8 @@ import { Agent, ServerOptions, cli, dedent, defineAgent, tts, voice } from "@liv
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import { getAgentEnv, initialVeraConfig } from "@heyvera/config";
+import { itemKey } from "@heyvera/core";
+import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
@@ -9,6 +11,8 @@ import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.j
 dotenv.config({ path: [".env.local", "../../.env.local", ".env"] });
 
 const env = getAgentEnv();
+const database = createDatabase(env.DATABASE_URL);
+const conversations = new DrizzleConversationRepository(database.db);
 const sessionNoticeTopic = "heyvera.session";
 
 const endMessages: Record<SessionEndReason, string> = {
@@ -31,10 +35,33 @@ function createVeraAgent() {
 
 export default defineAgent({
   entry: async (context) => {
+    const metadata = (() => {
+      try {
+        return JSON.parse(context.job.metadata) as { conversationId?: unknown };
+      } catch {
+        return {};
+      }
+    })();
+    const conversationId = typeof metadata.conversationId === "string" ? metadata.conversationId : undefined;
     console.info("agent_job_received", {
       room: context.room.name,
       agent: initialVeraConfig.name,
-      phase: 2,
+      phase: 3,
+      conversationId,
+    });
+
+    let persistenceQueue = Promise.resolve();
+    const enqueuePersistence = (label: string, operation: () => Promise<unknown>) => {
+      if (!conversationId) return;
+      persistenceQueue = persistenceQueue
+        .then(operation)
+        .then(() => undefined)
+        .catch((error: unknown) => {
+          console.error("agent_persistence_failed", { room: context.room.name, conversationId, label, error });
+        });
+    };
+    context.addShutdownCallback(async () => {
+      await persistenceQueue;
     });
 
     const session = new voice.AgentSession({
@@ -88,16 +115,24 @@ export default defineAgent({
     }
 
     let lastFinalTranscriptAt: number | undefined;
+    let finalUserTurns = 0;
+    let assistantTurns = 0;
+    let guardrailEndReason: SessionEndReason | undefined;
     const loggedTtsRequests = new Set<string>();
     const guardrails = new SessionGuardrails({
       maxDurationMs: env.MAX_SESSION_MS,
       maxTurns: env.MAX_TURNS,
       onEnd: (reason) => {
+        guardrailEndReason = reason;
         console.info("agent_guardrail_reached", {
           room: context.room.name,
           reason,
           turns: guardrails.turns,
         });
+        enqueuePersistence("guardrail_finish", () => conversations.finish(conversationId!, {
+          status: "COMPLETED",
+          failureCode: "SESSION_LIMIT",
+        }));
         void publishNotice({ type: "session_ended", reason, message: endMessages[reason] })
           .catch((error: unknown) => console.warn("agent_notice_publish_failed", { error }))
           .finally(() => void session.close());
@@ -106,12 +141,52 @@ export default defineAgent({
 
     session.on(voice.AgentSessionEventTypes.UserInputTranscribed, (event) => {
       if (!event.isFinal) return;
+      finalUserTurns += 1;
       lastFinalTranscriptAt = event.createdAt;
       console.info("agent_user_turn_final", {
         room: context.room.name,
         turn: guardrails.onFinalUserTurn(),
         language: event.language,
       });
+      enqueuePersistence("user_message", () => conversations.appendFinalMessage(conversationId!, {
+        externalItemId: itemKey({
+          id: event.itemId,
+          role: "USER",
+          turnIndex: finalUserTurns,
+          content: event.transcript,
+        }),
+        role: "USER",
+        content: event.transcript,
+        isFinal: true,
+        startedAt: new Date(event.createdAt),
+        metadata: event.language ? { language: event.language } : undefined,
+      }));
+    });
+    session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (event) => {
+      const item = event.item;
+      if (item.type !== "message" || item.role !== "assistant") return;
+      const content = item.textContent?.trim();
+      if (!content) return;
+      assistantTurns += 1;
+      enqueuePersistence("assistant_message", () => conversations.appendFinalMessage(conversationId!, {
+        externalItemId: itemKey({
+          id: item.id,
+          role: "ASSISTANT",
+          turnIndex: assistantTurns,
+          content,
+        }),
+        role: "ASSISTANT",
+        content,
+        isFinal: true,
+        wasInterrupted: item.interrupted,
+        startedAt: new Date(item.createdAt),
+        metadata: {
+          generatedText: typeof item.extra.generatedText === "string"
+            ? item.extra.generatedText
+            : content,
+          ...item.extra,
+        },
+      }));
     });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (event) => {
       guardrails.onAgentStateChanged(event.newState);
@@ -174,6 +249,27 @@ export default defineAgent({
         reason: event.reason,
         turns: guardrails.turns,
       });
+      if (event.error || event.reason === voice.CloseReason.ERROR) {
+        enqueuePersistence("failed_finish", () => conversations.finish(conversationId!, {
+          status: "FAILED",
+          failureCode: "VOICE_PIPELINE_ERROR",
+        }));
+      } else if (guardrailEndReason) {
+        enqueuePersistence("guardrail_close", () => conversations.finish(conversationId!, {
+          status: "COMPLETED",
+          failureCode: "SESSION_LIMIT",
+        }));
+      } else if (event.reason === voice.CloseReason.USER_INITIATED) {
+        enqueuePersistence("user_finish", () => conversations.finish(conversationId!, { status: "COMPLETED" }));
+      } else {
+        const reconnectTimer = setTimeout(() => {
+          enqueuePersistence("abandoned_finish", () => conversations.finish(conversationId!, {
+            status: "ABANDONED",
+            failureCode: "RECONNECT_GRACE_EXPIRED",
+          }));
+        }, env.RECONNECT_GRACE_MS);
+        reconnectTimer.unref();
+      }
     });
 
     await session.start({
@@ -181,6 +277,7 @@ export default defineAgent({
       room: context.room,
     });
     await context.connect();
+    enqueuePersistence("mark_active", () => conversations.markActive(conversationId!));
     console.info("agent_room_connected", {
       room: context.room.name,
       stt: env.DEEPGRAM_STT_MODEL,

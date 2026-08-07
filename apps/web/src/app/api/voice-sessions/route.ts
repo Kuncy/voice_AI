@@ -1,8 +1,10 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { RoomAgentDispatch, RoomConfiguration, TrackSource } from "@livekit/protocol";
 import { getWebEnv } from "@heyvera/config";
+import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
 import { AccessToken } from "livekit-server-sdk";
 import { NextRequest, NextResponse } from "next/server";
+import { createSessionHandle } from "@/lib/session-handle";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,13 +34,6 @@ function consume(buckets: Map<string, RateBucket>, key: string, limit: number, w
   return true;
 }
 
-function sessionHandle(roomName: string, secret: string): string {
-  const expiresAt = Date.now() + 15 * 60_000;
-  const payload = Buffer.from(JSON.stringify({ roomName, expiresAt })).toString("base64url");
-  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
-}
-
 export async function POST(request: NextRequest) {
   if (request.headers.get("content-length") && request.headers.get("content-length") !== "0") {
     return NextResponse.json({ error: "Der Endpunkt akzeptiert keinen Request-Body." }, { status: 400 });
@@ -52,9 +47,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Zu viele Sitzungen. Bitte versuche es später erneut." }, { status: 429 });
   }
 
+  let database: ReturnType<typeof createDatabase> | undefined;
+  let repository: DrizzleConversationRepository | undefined;
+  let conversationId: string | undefined;
   try {
     const env = getWebEnv();
+    database = createDatabase(env.DATABASE_URL, { max: 1 });
+    repository = new DrizzleConversationRepository(database.db);
     const roomName = `vera-${randomUUID()}`;
+    const conversation = await repository.create({
+      roomName,
+      runtimeSnapshot: {
+        stt: "deepgram",
+        sttModel: process.env.DEEPGRAM_STT_MODEL ?? "flux-general-multi",
+        llm: "openai",
+        llmModel: process.env.OPENAI_MODEL ?? "gpt-4.1",
+        tts: "deepgram",
+        ttsModel: process.env.DEEPGRAM_TTS_MODEL ?? "aura-2-viktoria-de",
+        ttsFallbackModel: process.env.DEEPGRAM_TTS_FALLBACK_MODEL ?? "aura-2-elara-de",
+        livekitAgentName: env.LIVEKIT_AGENT_NAME,
+        maxSessionMs: Number(process.env.MAX_SESSION_MS ?? 600_000),
+        idleTimeoutMs: Number(process.env.IDLE_TIMEOUT_MS ?? 60_000),
+        maxTurns: Number(process.env.MAX_TURNS ?? 40),
+        reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 60_000),
+        phase: 3,
+      },
+    });
+    conversationId = conversation.id;
     const token = new AccessToken(env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET, {
       identity: `web-${randomUUID()}`,
       name: "HeyVera Gast",
@@ -73,7 +92,7 @@ export async function POST(request: NextRequest) {
       agents: [
         new RoomAgentDispatch({
           agentName: env.LIVEKIT_AGENT_NAME,
-          metadata: JSON.stringify({ phase: 1 }),
+          metadata: JSON.stringify({ phase: 3, conversationId: conversation.id }),
         }),
       ],
     });
@@ -83,7 +102,11 @@ export async function POST(request: NextRequest) {
       livekitUrl: env.LIVEKIT_URL,
       roomName,
     });
-    response.cookies.set("heyvera_session", sessionHandle(roomName, env.SESSION_SECRET), {
+    response.cookies.set("heyvera_session", createSessionHandle({
+      conversationId: conversation.id,
+      roomName,
+      expiresAt: Date.now() + 15 * 60_000,
+    }, env.SESSION_SECRET), {
       httpOnly: true,
       sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
@@ -92,7 +115,14 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (error) {
+    if (conversationId && repository) {
+      await repository
+        .finish(conversationId, { status: "FAILED", failureCode: "SESSION_CREATE_FAILED" })
+        .catch(() => undefined);
+    }
     console.error("voice_session_create_failed", { error });
     return NextResponse.json({ error: "Die Voice-Session konnte nicht gestartet werden." }, { status: 503 });
+  } finally {
+    await database?.close();
   }
 }

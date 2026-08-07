@@ -10,6 +10,7 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
       LIVEKIT_AGENT_NAME: ${LIVEKIT_AGENT_NAME:-heyvera}
       SESSION_SECRET: ${SESSION_SECRET:?}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-heyvera}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-heyvera}
     expose:
       - "3000"
     healthcheck:
@@ -19,6 +20,9 @@ services:
       retries: 6
       start_period: 20s
     restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   agent:
     build:
@@ -38,6 +42,8 @@ services:
       MAX_SESSION_MS: ${MAX_SESSION_MS:-600000}
       IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-60000}
       MAX_TURNS: ${MAX_TURNS:-40}
+      RECONNECT_GRACE_MS: ${RECONNECT_GRACE_MS:-60000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-heyvera}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-heyvera}
     expose:
       - "8081"
     healthcheck:
@@ -48,3 +54,37 @@ services:
       start_period: 20s
     stop_grace_period: 11m
     restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/agent/Dockerfile
+    command: ["./packages/db/node_modules/.bin/tsx", "packages/db/src/migrate.ts"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-heyvera}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-heyvera}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    exclude_from_hc: true
+    restart: "no"
+
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-heyvera}
+      POSTGRES_USER: ${POSTGRES_USER:-heyvera}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-heyvera} -d ${POSTGRES_DB:-heyvera}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

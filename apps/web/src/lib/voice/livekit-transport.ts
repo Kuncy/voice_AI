@@ -73,6 +73,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     }
     this.setState("disconnecting");
     await this.room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+    await fetch("/api/voice-sessions/end", { method: "POST", keepalive: true }).catch(() => undefined);
     await this.room.disconnect();
     this.room = undefined;
     this.audioRoot.replaceChildren();

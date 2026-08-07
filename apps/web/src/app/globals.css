@@ -11,6 +11,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: #0b0b0d; color: var(--ink); }
 button { font: inherit; }
+a { color: inherit; }
 
 .voice-shell {
   min-height: 100dvh;
@@ -41,7 +42,11 @@ button { font: inherit; }
 }
 
 .brand { font-weight: 750; letter-spacing: -0.03em; font-size: 19px; }
+.brand-link { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.nav-link { margin-left: auto; color: var(--muted); font-size: 13px; text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
 .phase-badge { margin-left: auto; color: var(--muted); font-size: 13px; }
+.nav-link + .phase-badge { margin-left: 12px; }
 
 .voice-card {
   width: min(760px, calc(100% - 32px));
@@ -117,6 +122,21 @@ h1 { margin: 12px 0 8px; font-size: clamp(42px, 7vw, 68px); letter-spacing: -.05
 .transcript-assistant strong { color: #ad9cff; }
 .transcript em { color: var(--muted); font-size: 10px; font-style: normal; text-transform: uppercase; }
 .audio-root { display: none; }
+
+.history-shell { min-height: 100dvh; background: radial-gradient(circle at 50% 0%, rgba(96,71,202,.16), transparent 36rem), #0b0b0d; }
+.history-card { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 64px 0; }
+.history-card h1 { font-size: clamp(40px, 6vw, 64px); }
+.history-intro { color: var(--muted); margin-bottom: 32px; }
+.history-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.025); }
+.history-table { width: 100%; border-collapse: collapse; text-align: left; }
+.history-table th, .history-table td { padding: 16px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.history-table th { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.history-table tbody tr:last-child td { border-bottom: 0; }
+.status-pill { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #27262c; font-size: 11px; font-weight: 800; }
+.status-completed { color: var(--accent); }
+.status-active { color: #ad9cff; }
+.status-failed, .status-abandoned { color: #ff9e99; }
+.history-empty { padding: 48px !important; color: var(--muted); text-align: center; }
 
 @media (max-width: 600px) {
   .nav { height: 62px; padding: 0 18px; }

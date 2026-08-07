@@ -11,6 +11,8 @@
     "dev": "turbo dev",
     "dev:web": "pnpm --filter @heyvera/web dev",
     "dev:agent": "pnpm --filter @heyvera/agent dev",
+    "db:migrate": "pnpm --filter @heyvera/db migrate",
+    "db:sweep": "pnpm --filter @heyvera/db exec tsx ../../scripts/sweep-stale-conversations.ts",
     "start": "turbo start",
     "test": "turbo test",
     "typecheck": "turbo typecheck"

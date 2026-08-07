@@ -15,7 +15,7 @@ dotenv.config({
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
-  transpilePackages: ["@heyvera/config"],
+  transpilePackages: ["@heyvera/config", "@heyvera/core", "@heyvera/db"],
 };
 
 export default nextConfig;
