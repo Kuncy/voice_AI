@@ -5,16 +5,23 @@ import { getAgentEnv } from "@heyvera/config";
 import {
   composeAgentInstructions,
   DamageReportService,
+  ServiceRequestService,
   fallbackAgentSnapshot,
   itemKey,
   readAgentSnapshot,
   type AgentSnapshotV1,
 } from "@heyvera/core";
-import { createDatabase, DrizzleConversationRepository, DrizzleDamageReportRepository } from "@heyvera/db";
+import {
+  createDatabase,
+  DrizzleConversationRepository,
+  DrizzleDamageReportRepository,
+  DrizzleServiceRequestRepository,
+} from "@heyvera/db";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
 import { createDamageReportTool } from "./tools/create-damage-report.js";
+import { createServiceRequestTool } from "./tools/create-service-request.js";
 
 dotenv.config({ path: [".env.local", "../../.env.local", ".env"] });
 
@@ -22,6 +29,7 @@ const env = getAgentEnv();
 const database = createDatabase(env.DATABASE_URL);
 const conversations = new DrizzleConversationRepository(database.db);
 const damageReportService = new DamageReportService(new DrizzleDamageReportRepository(database.db));
+const serviceRequestService = new ServiceRequestService(new DrizzleServiceRequestRepository(database.db));
 const sessionNoticeTopic = "heyvera.session";
 const toolStatusTopic = "heyvera.tool-status";
 
@@ -130,9 +138,10 @@ export default defineAgent({
     }
 
     async function publishToolStatus(event: {
-      name: "create_damage_report";
+      name: "create_damage_report" | "create_service_request";
       status: "started" | "succeeded" | "failed";
       damageReportId?: string;
+      serviceRequestId?: string;
       code?: "VALIDATION_ERROR" | "PERSISTENCE_ERROR";
     }): Promise<void> {
       if (!context.room.isConnected || !context.room.localParticipant) return;
@@ -303,10 +312,11 @@ export default defineAgent({
     const tools = conversationId
       ? [
           createDamageReportTool({ conversationId, service: damageReportService, publishStatus: publishToolStatus }),
+          createServiceRequestTool({ conversationId, service: serviceRequestService, publishStatus: publishToolStatus }),
           beta.createEndCallTool({
             deleteRoom: true,
             extraDescription:
-              "Verwende dieses Tool nach einer Schadensmeldung erst, wenn der Nutzer auf die Abschlussfrage klar sagt, dass nichts mehr offen ist.",
+              "Verwende dieses Tool nach einer gespeicherten Schadensmeldung oder Anfrage erst, wenn der Nutzer auf die Abschlussfrage klar sagt, dass nichts mehr offen ist.",
             endInstructions: "Verabschiede dich kurz und freundlich auf Deutsch.",
             onToolCalled: async () => {
               enqueuePersistence("agent_completed_finish", () => conversations.finish(conversationId, { status: "COMPLETED" }));

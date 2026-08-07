@@ -23,9 +23,13 @@ test("damage report tool forwards the provider call id and publishes lifecycle s
 
   const result = await tool.execute(
     {
+      reporterName: "Samaster",
       category: "water",
       description: "Wasser tritt unter dem Waschbecken aus.",
       urgency: "high",
+      streetAndHouseNumber: "Musterstraße 12",
+      postalCode: "10115",
+      city: "Berlin",
     },
     {
       toolCallId: "provider-call-42",

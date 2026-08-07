@@ -24,6 +24,8 @@ export const toolCallStatus = pgEnum("tool_call_status", ["STARTED", "SUCCEEDED"
 export const damageCategory = pgEnum("damage_category", ["HEATING", "WATER", "ELECTRICITY", "STRUCTURAL", "OTHER"]);
 export const damageUrgency = pgEnum("damage_urgency", ["LOW", "MEDIUM", "HIGH", "EMERGENCY"]);
 export const damageReportStatus = pgEnum("damage_report_status", ["OPEN", "IN_REVIEW", "RESOLVED"]);
+export const serviceRequestType = pgEnum("service_request_type", ["APPOINTMENT", "BILLING"]);
+export const serviceRequestStatus = pgEnum("service_request_status", ["OPEN", "IN_REVIEW", "RESOLVED"]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -107,10 +109,29 @@ export const damageReports = pgTable("damage_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
   conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  reporterName: text("reporter_name"),
   category: damageCategory("category").notNull(),
   description: text("description").notNull(),
   urgency: damageUrgency("urgency").notNull(),
+  streetAndHouseNumber: text("street_and_house_number"),
+  postalCode: text("postal_code"),
+  city: text("city"),
   status: damageReportStatus("status").notNull().default("OPEN"),
+  ...timestamps,
+});
+
+export const serviceRequests = pgTable("service_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  requestType: serviceRequestType("request_type").notNull(),
+  reporterName: text("reporter_name").notNull(),
+  description: text("description").notNull(),
+  streetAndHouseNumber: text("street_and_house_number").notNull(),
+  postalCode: text("postal_code").notNull(),
+  city: text("city").notNull(),
+  preferredTimeframe: text("preferred_timeframe"),
+  status: serviceRequestStatus("status").notNull().default("OPEN"),
   ...timestamps,
 });
 
@@ -120,6 +141,7 @@ export const conversationRelations = relations(conversations, ({ one, many }) =>
   messages: many(messages),
   toolCalls: many(toolCalls),
   damageReports: many(damageReports),
+  serviceRequests: many(serviceRequests),
 }));
 export const messageRelations = relations(messages, ({ one }) => ({
   conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
@@ -128,8 +150,13 @@ export const toolCallRelations = relations(toolCalls, ({ one }) => ({
   conversation: one(conversations, { fields: [toolCalls.conversationId], references: [conversations.id] }),
   message: one(messages, { fields: [toolCalls.messageId], references: [messages.id] }),
   damageReport: one(damageReports),
+  serviceRequest: one(serviceRequests),
 }));
 export const damageReportRelations = relations(damageReports, ({ one }) => ({
   conversation: one(conversations, { fields: [damageReports.conversationId], references: [conversations.id] }),
   toolCall: one(toolCalls, { fields: [damageReports.toolCallId], references: [toolCalls.id] }),
+}));
+export const serviceRequestRelations = relations(serviceRequests, ({ one }) => ({
+  conversation: one(conversations, { fields: [serviceRequests.conversationId], references: [conversations.id] }),
+  toolCall: one(toolCalls, { fields: [serviceRequests.toolCallId], references: [toolCalls.id] }),
 }));

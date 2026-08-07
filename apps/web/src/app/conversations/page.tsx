@@ -21,6 +21,7 @@ export default async function ConversationsPage() {
       <nav className="nav">
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/settings">Settings</Link>
+        <Link className="nav-link" href="/requests">Vorgänge</Link>
         <span className="phase-badge">Phase 6 · History</span>
       </nav>
       <section className="history-card">

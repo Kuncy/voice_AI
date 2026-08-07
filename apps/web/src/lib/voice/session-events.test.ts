@@ -35,11 +35,15 @@ test("accepts valid session notices and rejects malformed data", () => {
   );
 });
 
-test("accepts only known damage-report tool status events", () => {
+test("accepts only known intake tool status events", () => {
   const encoder = new TextEncoder();
   assert.deepEqual(
     parseToolStatus(encoder.encode(JSON.stringify({ name: "create_damage_report", status: "started" }))),
     { name: "create_damage_report", status: "started" },
+  );
+  assert.deepEqual(
+    parseToolStatus(encoder.encode(JSON.stringify({ name: "create_service_request", status: "succeeded" }))),
+    { name: "create_service_request", status: "succeeded" },
   );
   assert.equal(
     parseToolStatus(encoder.encode(JSON.stringify({ name: "delete_everything", status: "succeeded" }))),

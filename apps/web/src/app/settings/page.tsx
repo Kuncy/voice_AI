@@ -21,6 +21,7 @@ export default async function SettingsPage() {
       <nav className="nav">
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/conversations">Conversations</Link>
+        <Link className="nav-link" href="/requests">Vorgänge</Link>
         <span className="phase-badge">Phase 4 · Settings</span>
       </nav>
       <section className="settings-card">

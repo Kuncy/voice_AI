@@ -965,6 +965,34 @@ Wenn dieses Gate nicht erreicht wird, beginnen DB, Settings, Tools und Auth noch
 
 **Mindestlieferumfang:** Liste und Detailansicht mit Transcript, Tool Call und Damage Report.
 
+### Ergänzung nach Phase 6 — Objektadresse
+
+**Ziel:** Jede neue Schadensmeldung kann eindeutig einem betroffenen Objekt zugeordnet werden.
+
+**Umfang:**
+
+- Vera fragt fehlende Angaben zu Straße und Hausnummer sowie PLZ und Ort einzeln ab.
+- Vera übernimmt den Namen der meldenden Person aus einer freien Vorstellung und fragt nur nach, wenn kein Name genannt wurde.
+- Vera leitet die Dringlichkeit aus den geschilderten Fakten ab, statt den Nutzer eine technische Stufe auswählen zu lassen; nur unklare Auswirkungen oder Gefahren führen zu einer konkreten Rückfrage.
+- Name und vollständige Objektadresse sind Teil der Zusammenfassung, die der Nutzer vor dem Speichern bestätigt.
+- Neue Schadensmeldungen speichern Straße/Hausnummer, fünfstellige PLZ und Ort verpflichtend.
+- Die Conversation-Detailansicht zeigt die Objektadresse beim Damage Report.
+- Bestehende Schadensmeldungen bleiben durch nullable Datenbankspalten rückwärtskompatibel und werden mit „Nicht erfasst“ angezeigt.
+- Terminwünsche und Nebenkostenfragen sind ausdrücklich keine Schadensmeldungen und werden über einen getrennten Anfragevorgang erfasst.
+
+### Ergänzung nach Phase 6 — Termin-, Nebenkosten- und Vorgangsübersicht
+
+**Ziel:** Häufige Anliegen außerhalb von Schäden werden als eigene Vorgänge erfasst und gemeinsam übersichtlich dargestellt.
+
+**Umfang:**
+
+- `create_service_request` speichert bestätigte Termin- und Nebenkostenanfragen getrennt von Damage Reports.
+- Beide Anfragetypen enthalten Name, konkretes Anliegen und vollständige Objektadresse; Terminanfragen zusätzlich den gewünschten Termin oder Zeitraum.
+- Vera behauptet weder eine verbindliche Terminbuchung noch Zugriff auf individuelle Abrechnungsdaten.
+- Das fachliche Ergebnis steht in der Conversation-Detailansicht oberhalb des Transkripts.
+- `/requests` zeigt Schäden, Terminwünsche und Nebenkostenanfragen gemeinsam, neueste zuerst, und verlinkt auf die Ursprungskonversation.
+- Tool Calls und strukturierte Vorgänge werden transaktional und idempotent gespeichert.
+
 ### Phase 7 — Barge-in, Latency und Error Handling
 
 **Ziel:** Der funktionierende Bot fühlt sich natürlich und belastbar an.

@@ -15,6 +15,27 @@
       "when": 1786104000000,
       "tag": "0001_phase_5",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786111200000,
+      "tag": "0002_damage_report_address",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786114800000,
+      "tag": "0003_damage_report_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786118400000,
+      "tag": "0004_service_requests",
+      "breakpoints": true
     }
   ]
 }
