@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  '@livekit/local-inference': true
+  '@livekit/rtc-node': true
+  esbuild: true
+  sharp: true
+
+minimumReleaseAgeExclude:
+  - tsx@4.23.10

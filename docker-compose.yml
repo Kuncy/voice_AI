@@ -1,0 +1,50 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: production
+      LIVEKIT_URL: ${LIVEKIT_URL:?}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
+      LIVEKIT_AGENT_NAME: ${LIVEKIT_AGENT_NAME:-heyvera}
+      SESSION_SECRET: ${SESSION_SECRET:?}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: .
+      dockerfile: apps/agent/Dockerfile
+    environment:
+      NODE_ENV: production
+      LIVEKIT_URL: ${LIVEKIT_URL:?}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
+      LIVEKIT_AGENT_NAME: ${LIVEKIT_AGENT_NAME:-heyvera}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:?}
+      DEEPGRAM_STT_MODEL: ${DEEPGRAM_STT_MODEL:-flux-general-multi}
+      DEEPGRAM_TTS_MODEL: ${DEEPGRAM_TTS_MODEL:-aura-2-viktoria-de}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1}
+      MAX_SESSION_MS: ${MAX_SESSION_MS:-600000}
+      IDLE_TIMEOUT_MS: ${IDLE_TIMEOUT_MS:-60000}
+      MAX_TURNS: ${MAX_TURNS:-40}
+    expose:
+      - "8081"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8081/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 11m
+    restart: unless-stopped

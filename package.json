@@ -1,0 +1,21 @@
+{
+  "name": "heyvera",
+  "private": true,
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "dev:web": "pnpm --filter @heyvera/web dev",
+    "dev:agent": "pnpm --filter @heyvera/agent dev",
+    "start": "turbo start",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": {
+    "turbo": "2.10.8",
+    "typescript": "5.9.3"
+  }
+}
