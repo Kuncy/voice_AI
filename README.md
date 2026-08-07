@@ -79,7 +79,8 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 
 - `create_damage_report` verlangt den Namen der meldenden Person, Kategorie, konkrete Beschreibung, Dringlichkeit sowie Straße/Hausnummer, PLZ und Ort des betroffenen Objekts und darf erst nach ausdrücklicher Bestätigung aufgerufen werden.
 - Vera leitet die Dringlichkeit aus den geschilderten Fakten ab und fragt nicht nach einer technischen Stufe. Nur bei unklarer Auswirkung oder Gefahr stellt sie eine konkrete Rückfrage.
-- Termin-, Nebenkosten- und sonstige Verwaltungsanfragen lösen ausdrücklich keine Schadensmeldung aus; dafür ist noch kein eigener strukturierter Vorgang implementiert.
+- Termin- und Nebenkostenanfragen lösen ausdrücklich keine Schadensmeldung aus, sondern werden als eigene strukturierte Vorgänge gespeichert.
+- `create_service_request` speichert bestätigte Termin- und Nebenkostenanfragen als eigene Vorgänge. Ein Terminwunsch ist keine verbindliche Buchung; individuelle Abrechnungen werden ohne angebundene Fachdaten nicht beantwortet.
 - `providerCallId` schützt den Schreibpfad gegen Wiederholungen. Tool Call und Damage Report werden gemeinsam in einer PostgreSQL-Transaktion gespeichert.
 - Das Tool liefert ausschließlich strukturierte Erfolgs- oder Fehlercodes; Vera bestätigt Erfolg erst nach einem erfolgreichen Commit.
 - Der Live-Status wird über `heyvera.tool-status` im Voice Screen als eigenes Badge angezeigt.
@@ -93,3 +94,10 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 - Agent-Name und Tonalität stammen aus dem unveränderlichen Conversation-Snapshot. Unbekannte Snapshot-Versionen werden mit Hinweis und Rohdaten dargestellt.
 - Eigene Loading-, Empty-, Not-Found- und Error-Zustände halten die History auch bei fehlenden oder ungültigen Daten verständlich.
 - Nach einer erfolgreichen Meldung fragt Vera, ob noch etwas offen ist. Bei einer klaren Verneinung spielt LiveKits `end_call`-Tool die Verabschiedung aus und beendet anschließend den Room.
+
+## Intake-Erweiterung nach Phase 6
+
+- Die Conversation-Detailseite zeigt das fachliche Ergebnis direkt oberhalb des Transkripts; technische Tool-Details bleiben weiter unten verfügbar.
+- `/requests` fasst Schadensmeldungen, Terminwünsche und Nebenkostenanfragen in einer gemeinsamen Übersicht zusammen und verlinkt auf die jeweilige Conversation.
+- Name und Objektadresse werden für alle neuen Vorgänge strukturiert gespeichert. Terminanfragen enthalten zusätzlich den gewünschten Termin oder Zeitraum.
+- Schäden verwenden weiterhin `create_damage_report`; Termin- und Nebenkostenanfragen verwenden getrennt davon `create_service_request`.

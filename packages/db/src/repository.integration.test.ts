@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { DrizzleAgentRepository, DrizzleConversationRepository, DrizzleDamageReportRepository } from "./repository";
-import { conversations, damageReports, messages, toolCalls } from "./schema";
+import {
+  DrizzleAgentRepository,
+  DrizzleConversationRepository,
+  DrizzleDamageReportRepository,
+  DrizzleIntakeRepository,
+  DrizzleServiceRequestRepository,
+} from "./repository";
+import { conversations, damageReports, messages, serviceRequests, toolCalls } from "./schema";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -211,6 +217,55 @@ test("damage report creation is transactional and idempotent by provider call id
       .from(toolCalls)
       .where(eq(toolCalls.providerCallId, "orphan-provider-call"));
     assert.equal(orphanCalls.length, 0);
+  } finally {
+    if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
+    await database.close();
+  }
+});
+
+test("service requests are transactional, idempotent and included in the intake overview", { skip: !databaseUrl }, async () => {
+  const database = createDatabase(databaseUrl!, { max: 2 });
+  const conversationRepository = new DrizzleConversationRepository(database.db);
+  const serviceRequestRepository = new DrizzleServiceRequestRepository(database.db);
+  let conversationId: string | undefined;
+  try {
+    const conversation = await conversationRepository.create({
+      roomName: `service-request-${crypto.randomUUID()}`,
+      runtimeSnapshot: { phase: "intake", test: true },
+    });
+    conversationId = conversation.id;
+    const input = {
+      conversationId: conversation.id,
+      providerCallId: "service-provider-call-1",
+      request: {
+        requestType: "appointment" as const,
+        reporterName: "Erika Muster",
+        description: "Ich benötige einen Termin zur Besichtigung der Heizkörper.",
+        streetAndHouseNumber: "Musterstraße 12",
+        postalCode: "10115",
+        city: "Berlin",
+        preferredTimeframe: "Montagvormittag",
+      },
+    };
+
+    const first = await serviceRequestRepository.create(input);
+    const retry = await serviceRequestRepository.create(input);
+    assert.deepEqual(retry, first);
+
+    const saved = await database.db.select().from(serviceRequests)
+      .where(eq(serviceRequests.conversationId, conversation.id));
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0]?.requestType, "APPOINTMENT");
+    assert.equal(saved[0]?.preferredTimeframe, "Montagvormittag");
+
+    const detail = await conversationRepository.getDetail(conversation.id);
+    assert.equal(detail?.toolCalls[0]?.serviceRequestId, first.serviceRequestId);
+    assert.equal(detail?.toolCalls[0]?.serviceReporterName, input.request.reporterName);
+
+    const overview = await new DrizzleIntakeRepository(database.db).list();
+    const overviewItem = overview.find((item) => item.id === first.serviceRequestId);
+    assert.equal(overviewItem?.kind, "APPOINTMENT");
+    assert.equal(overviewItem?.conversationId, conversation.id);
   } finally {
     if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
     await database.close();

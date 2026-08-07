@@ -978,7 +978,20 @@ Wenn dieses Gate nicht erreicht wird, beginnen DB, Settings, Tools und Auth noch
 - Neue Schadensmeldungen speichern Straße/Hausnummer, fünfstellige PLZ und Ort verpflichtend.
 - Die Conversation-Detailansicht zeigt die Objektadresse beim Damage Report.
 - Bestehende Schadensmeldungen bleiben durch nullable Datenbankspalten rückwärtskompatibel und werden mit „Nicht erfasst“ angezeigt.
-- Terminwünsche, Nebenkostenfragen und andere Verwaltungsanliegen sind ausdrücklich keine Schadensmeldungen. Ein eigener allgemeiner Anfragevorgang bleibt eine separate Erweiterung.
+- Terminwünsche und Nebenkostenfragen sind ausdrücklich keine Schadensmeldungen und werden über einen getrennten Anfragevorgang erfasst.
+
+### Ergänzung nach Phase 6 — Termin-, Nebenkosten- und Vorgangsübersicht
+
+**Ziel:** Häufige Anliegen außerhalb von Schäden werden als eigene Vorgänge erfasst und gemeinsam übersichtlich dargestellt.
+
+**Umfang:**
+
+- `create_service_request` speichert bestätigte Termin- und Nebenkostenanfragen getrennt von Damage Reports.
+- Beide Anfragetypen enthalten Name, konkretes Anliegen und vollständige Objektadresse; Terminanfragen zusätzlich den gewünschten Termin oder Zeitraum.
+- Vera behauptet weder eine verbindliche Terminbuchung noch Zugriff auf individuelle Abrechnungsdaten.
+- Das fachliche Ergebnis steht in der Conversation-Detailansicht oberhalb des Transkripts.
+- `/requests` zeigt Schäden, Terminwünsche und Nebenkostenanfragen gemeinsam, neueste zuerst, und verlinkt auf die Ursprungskonversation.
+- Tool Calls und strukturierte Vorgänge werden transaktional und idempotent gespeichert.
 
 ### Phase 7 — Barge-in, Latency und Error Handling
 

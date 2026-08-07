@@ -81,6 +81,7 @@ export function VoiceScreen() {
         <span className="brand-mark">V</span>
         <span className="brand">HeyVera</span>
         <Link className="nav-link" href="/conversations">Conversations</Link>
+        <Link className="nav-link" href="/requests">Vorgänge</Link>
         <Link className="nav-link" href="/settings">Settings</Link>
         <span className="phase-badge">Voice Assistant</span>
       </nav>
@@ -106,10 +107,10 @@ export function VoiceScreen() {
           <p className={`tool-status tool-status-${toolStatus.status}`} role="status">
             <span aria-hidden="true">{toolStatus.status === "started" ? "↻" : toolStatus.status === "succeeded" ? "✓" : "!"}</span>
             {toolStatus.status === "started"
-              ? "Schadensmeldung wird gespeichert"
+              ? toolStatus.name === "create_damage_report" ? "Schadensmeldung wird gespeichert" : "Anfrage wird gespeichert"
               : toolStatus.status === "succeeded"
-                ? "Schadensmeldung gespeichert"
-                : "Schadensmeldung konnte nicht gespeichert werden"}
+                ? toolStatus.name === "create_damage_report" ? "Schadensmeldung gespeichert" : "Anfrage gespeichert"
+                : toolStatus.name === "create_damage_report" ? "Schadensmeldung konnte nicht gespeichert werden" : "Anfrage konnte nicht gespeichert werden"}
           </p>
         )}
 

@@ -54,7 +54,7 @@ export function parseToolStatus(payload: Uint8Array): ToolStatusEvent | undefine
   try {
     const value = JSON.parse(new TextDecoder().decode(payload)) as Partial<ToolStatusEvent>;
     if (
-      value.name === "create_damage_report" &&
+      (value.name === "create_damage_report" || value.name === "create_service_request") &&
       ["started", "succeeded", "failed"].includes(value.status ?? "")
     ) {
       return { name: value.name, status: value.status as ToolStatusEvent["status"] };

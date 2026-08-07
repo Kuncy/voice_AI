@@ -14,6 +14,7 @@ const categoryLabels = {
   OTHER: "Sonstiges",
 } as const;
 const urgencyLabels = { LOW: "Niedrig", MEDIUM: "Mittel", HIGH: "Hoch", EMERGENCY: "Notfall" } as const;
+const serviceRequestLabels = { APPOINTMENT: "Terminanfrage", BILLING: "Nebenkostenanfrage" } as const;
 const roleLabels = { USER: "Du", ASSISTANT: "Vera", SYSTEM: "System", TOOL: "Tool" } as const;
 
 function duration(value: number | null): string {
@@ -53,12 +54,14 @@ export default async function ConversationDetailPage({ params }: { params: Promi
   const { conversation, messages, toolCalls } = detail;
   const snapshot = readAgentSnapshotForHistory(conversation.agentSnapshot);
   const startedAt = conversation.startedAt ?? conversation.createdAt;
+  const intakeCalls = toolCalls.filter((call) => call.damageReportId || call.serviceRequestId);
 
   return (
     <main className="history-shell">
       <nav className="nav">
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/settings">Settings</Link>
+        <Link className="nav-link" href="/requests">Vorgänge</Link>
         <span className="phase-badge">Phase 6 · Detail</span>
       </nav>
 
@@ -86,6 +89,38 @@ export default async function ConversationDetailPage({ params }: { params: Promi
             <details><summary>Rohdaten anzeigen</summary><pre>{json(snapshot.raw)}</pre></details>
           </section>
         )}
+
+        <section className="detail-section result-section">
+          <div className="section-heading"><h2>Ergebnis</h2><span>{intakeCalls.length} {intakeCalls.length === 1 ? "Vorgang" : "Vorgänge"}</span></div>
+          {intakeCalls.length === 0 ? (
+            <div className="detail-empty">In diesem Gespräch wurde noch kein strukturierter Vorgang aufgenommen.</div>
+          ) : (
+            <div className="intake-result-list">
+              {intakeCalls.map((call) => call.damageReportId ? (
+                <article className="intake-result-card intake-result-damage" key={call.damageReportId}>
+                  <header><div><span className="tool-kicker">SCHADENSMELDUNG</span><h3>#{call.damageReportId.slice(0, 8)}</h3></div><span className="status-pill status-succeeded">{call.damageStatus}</span></header>
+                  <p>{call.damageDescription}</p>
+                  <dl>
+                    <div><dt>Gemeldet von</dt><dd>{call.damageReporterName ?? "Nicht erfasst"}</dd></div>
+                    <div><dt>Objektadresse</dt><dd>{call.damageStreetAndHouseNumber && call.damagePostalCode && call.damageCity ? `${call.damageStreetAndHouseNumber}, ${call.damagePostalCode} ${call.damageCity}` : "Nicht erfasst"}</dd></div>
+                    {call.damageCategory && <div><dt>Kategorie</dt><dd>{categoryLabels[call.damageCategory]}</dd></div>}
+                    {call.damageUrgency && <div><dt>Dringlichkeit</dt><dd>{urgencyLabels[call.damageUrgency]}</dd></div>}
+                  </dl>
+                </article>
+              ) : call.serviceRequestId && call.serviceRequestType ? (
+                <article className="intake-result-card intake-result-service" key={call.serviceRequestId}>
+                  <header><div><span className="tool-kicker">{serviceRequestLabels[call.serviceRequestType].toUpperCase()}</span><h3>#{call.serviceRequestId.slice(0, 8)}</h3></div><span className="status-pill status-succeeded">{call.serviceStatus}</span></header>
+                  <p>{call.serviceDescription}</p>
+                  <dl>
+                    <div><dt>Angefragt von</dt><dd>{call.serviceReporterName}</dd></div>
+                    <div><dt>Objektadresse</dt><dd>{call.serviceStreetAndHouseNumber}, {call.servicePostalCode} {call.serviceCity}</dd></div>
+                    {call.servicePreferredTimeframe && <div><dt>Terminwunsch</dt><dd>{call.servicePreferredTimeframe}</dd></div>}
+                  </dl>
+                </article>
+              ) : null)}
+            </div>
+          )}
+        </section>
 
         <section className="detail-section">
           <div className="section-heading"><h2>Gesprächsverlauf</h2><span>{messages.length} {messages.length === 1 ? "Beitrag" : "Beiträge"}</span></div>
@@ -136,26 +171,6 @@ export default async function ConversationDetailPage({ params }: { params: Promi
                   </dl>
                   <details className="raw-details"><summary>Argumente und Ergebnis</summary><pre>{json({ arguments: call.arguments, result: call.result })}</pre></details>
 
-                  {call.damageReportId && call.damageCategory && call.damageUrgency && call.damageStatus && (
-                    <div className="damage-report-card">
-                      <div className="damage-report-title"><span>Schadensmeldung</span><strong>#{call.damageReportId.slice(0, 8)}</strong></div>
-                      <p>{call.damageDescription}</p>
-                      <dl>
-                        <div><dt>Gemeldet von</dt><dd>{call.damageReporterName ?? "Nicht erfasst"}</dd></div>
-                        <div>
-                          <dt>Objektadresse</dt>
-                          <dd>
-                            {call.damageStreetAndHouseNumber && call.damagePostalCode && call.damageCity
-                              ? `${call.damageStreetAndHouseNumber}, ${call.damagePostalCode} ${call.damageCity}`
-                              : "Nicht erfasst"}
-                          </dd>
-                        </div>
-                        <div><dt>Kategorie</dt><dd>{categoryLabels[call.damageCategory]}</dd></div>
-                        <div><dt>Dringlichkeit</dt><dd>{urgencyLabels[call.damageUrgency]}</dd></div>
-                        <div><dt>Status</dt><dd>{call.damageStatus}</dd></div>
-                      </dl>
-                    </div>
-                  )}
                 </article>
               ))}
             </div>

@@ -21,6 +21,8 @@ test("prompt keeps the immutable policy before configured instructions", () => {
   assert.match(prompt, /Namen der meldenden Person/);
   assert.match(prompt, /niemals abstrakt nach einer niedrigen, mittleren oder hohen Dringlichkeit/);
   assert.match(prompt, /Terminwünsche, Nebenkostenfragen/);
+  assert.match(prompt, /keinen Termin verbindlich buchen/);
+  assert.match(prompt, /create_service_request erst nach ausdrücklicher Bestätigung/);
 });
 
 test("snapshot reader supports legacy values and rejects unknown versions", () => {
