@@ -11,6 +11,7 @@ const liveKitEnvSchema = z.object({
 
 const webEnvSchema = liveKitEnvSchema.extend({
   SESSION_SECRET: z.string().min(32),
+  DATABASE_URL: z.string().min(1),
 });
 
 const agentEnvSchema = liveKitEnvSchema.extend({
@@ -23,6 +24,8 @@ const agentEnvSchema = liveKitEnvSchema.extend({
   MAX_SESSION_MS: z.coerce.number().int().positive().default(600_000),
   IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   MAX_TURNS: z.coerce.number().int().positive().default(40),
+  RECONNECT_GRACE_MS: z.coerce.number().int().nonnegative().default(60_000),
+  DATABASE_URL: z.string().min(1),
 });
 
 export type LiveKitEnv = z.infer<typeof liveKitEnvSchema>;

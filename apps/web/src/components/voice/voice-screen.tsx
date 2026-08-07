@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FakeVoiceTransport } from "@/lib/voice/fake-transport";
 import { LiveKitVoiceTransport } from "@/lib/voice/livekit-transport";
@@ -75,6 +76,7 @@ export function VoiceScreen() {
       <nav className="nav">
         <span className="brand-mark">V</span>
         <span className="brand">HeyVera</span>
+        <Link className="nav-link" href="/conversations">Conversations</Link>
         <span className="phase-badge">Voice Assistant</span>
       </nav>
 

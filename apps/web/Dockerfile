@@ -10,9 +10,13 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.js
 COPY apps/web/package.json apps/web/package.json
 COPY apps/agent/package.json apps/agent/package.json
 COPY packages/config/package.json packages/config/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/db/package.json packages/db/package.json
 RUN pnpm install --frozen-lockfile
 COPY apps/web apps/web
 COPY packages/config packages/config
+COPY packages/core packages/core
+COPY packages/db packages/db
 RUN pnpm --filter @heyvera/web build
 
 FROM node:24-bookworm-slim AS runtime
