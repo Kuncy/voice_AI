@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FakeVoiceTransport } from "@/lib/voice/fake-transport";
 import { LiveKitVoiceTransport } from "@/lib/voice/livekit-transport";
-import type { TranscriptEvent, VoiceState, VoiceTransport } from "@/lib/voice/transport";
+import type { ToolStatusEvent, TranscriptEvent, VoiceState, VoiceTransport } from "@/lib/voice/transport";
 
 const labels: Record<VoiceState, string> = {
   idle: "Bereit",
@@ -24,6 +24,7 @@ export function VoiceScreen() {
   const [transcripts, setTranscripts] = useState<TranscriptEvent[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [toolStatus, setToolStatus] = useState<ToolStatusEvent>();
 
   useEffect(() => {
     if (!audioRoot.current) return;
@@ -44,10 +45,12 @@ export function VoiceScreen() {
     const unsubscribeNotice = instance.onNotice((event) => {
       setNotice(event.message);
     });
+    const unsubscribeToolStatus = instance.onToolStatus(setToolStatus);
     return () => {
       unsubscribeState();
       unsubscribeTranscript();
       unsubscribeNotice();
+      unsubscribeToolStatus();
       void instance.disconnect();
       transport.current = null;
     };
@@ -56,6 +59,7 @@ export function VoiceScreen() {
   async function toggleCall() {
     setError(undefined);
     setNotice(undefined);
+    setToolStatus(undefined);
     try {
       if (state === "idle" || state === "error") {
         setTranscripts([]);
@@ -98,6 +102,16 @@ export function VoiceScreen() {
 
         {error && <p className="error-message">{error}</p>}
         {notice && <p className="notice-message">{notice}</p>}
+        {toolStatus && (
+          <p className={`tool-status tool-status-${toolStatus.status}`} role="status">
+            <span aria-hidden="true">{toolStatus.status === "started" ? "↻" : toolStatus.status === "succeeded" ? "✓" : "!"}</span>
+            {toolStatus.status === "started"
+              ? "Schadensmeldung wird gespeichert"
+              : toolStatus.status === "succeeded"
+                ? "Schadensmeldung gespeichert"
+                : "Schadensmeldung konnte nicht gespeichert werden"}
+          </p>
+        )}
 
         <div className="transcript-panel">
           <div className="panel-heading">

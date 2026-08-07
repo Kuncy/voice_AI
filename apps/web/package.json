@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

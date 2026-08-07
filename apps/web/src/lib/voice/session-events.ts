@@ -1,6 +1,7 @@
-import type { VoiceState } from "./transport";
+import type { ToolStatusEvent, VoiceState } from "./transport";
 
 export const sessionNoticeTopic = "heyvera.session";
+export const toolStatusTopic = "heyvera.tool-status";
 
 export type SessionNoticePayload =
   | {
@@ -38,6 +39,21 @@ export function parseSessionNotice(payload: Uint8Array): SessionNoticePayload | 
       ["idle_timeout", "max_duration", "max_turns"].includes(value.reason ?? "")
     ) {
       return value as Extract<SessionNoticePayload, { type: "session_ended" }>;
+    }
+  } catch {
+    // Ignore malformed or unrelated room data.
+  }
+  return undefined;
+}
+
+export function parseToolStatus(payload: Uint8Array): ToolStatusEvent | undefined {
+  try {
+    const value = JSON.parse(new TextDecoder().decode(payload)) as Partial<ToolStatusEvent>;
+    if (
+      value.name === "create_damage_report" &&
+      ["started", "succeeded", "failed"].includes(value.status ?? "")
+    ) {
+      return { name: value.name, status: value.status as ToolStatusEvent["status"] };
     }
   } catch {
     // Ignore malformed or unrelated room data.

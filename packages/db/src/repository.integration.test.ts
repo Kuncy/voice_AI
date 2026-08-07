@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "./client";
-import { DrizzleAgentRepository, DrizzleConversationRepository } from "./repository";
-import { conversations, messages } from "./schema";
+import { DrizzleAgentRepository, DrizzleConversationRepository, DrizzleDamageReportRepository } from "./repository";
+import { conversations, damageReports, messages, toolCalls } from "./schema";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -142,6 +142,59 @@ test("new settings affect only new conversation snapshots", { skip: !databaseUrl
     for (const id of conversationIds) {
       await database.db.delete(conversations).where(eq(conversations.id, id));
     }
+    await database.close();
+  }
+});
+
+test("damage report creation is transactional and idempotent by provider call id", { skip: !databaseUrl }, async () => {
+  const database = createDatabase(databaseUrl!, { max: 2 });
+  const conversationRepository = new DrizzleConversationRepository(database.db);
+  const damageReportRepository = new DrizzleDamageReportRepository(database.db);
+  let conversationId: string | undefined;
+  try {
+    const conversation = await conversationRepository.create({
+      roomName: `damage-report-${crypto.randomUUID()}`,
+      runtimeSnapshot: { phase: 5, test: true },
+    });
+    conversationId = conversation.id;
+    const input = {
+      conversationId: conversation.id,
+      providerCallId: "provider-call-1",
+      report: {
+        category: "water" as const,
+        description: "Im Bad tritt Wasser unter dem Waschbecken aus.",
+        urgency: "high" as const,
+      },
+    };
+
+    const [first, retry] = await Promise.all([
+      damageReportRepository.create(input),
+      damageReportRepository.create(input),
+    ]);
+    const savedCalls = await database.db.select().from(toolCalls).where(eq(toolCalls.conversationId, conversation.id));
+    const savedReports = await database.db.select().from(damageReports).where(eq(damageReports.conversationId, conversation.id));
+
+    assert.deepEqual(retry, first);
+    assert.equal(savedCalls.length, 1);
+    assert.equal(savedCalls[0]?.status, "SUCCEEDED");
+    assert.deepEqual(savedCalls[0]?.result, { ok: true, damageReportId: first.damageReportId, status: "open" });
+    assert.equal(savedReports.length, 1);
+    assert.equal(savedReports[0]?.category, "WATER");
+    assert.equal(savedReports[0]?.urgency, "HIGH");
+    assert.equal(savedReports[0]?.toolCallId, savedCalls[0]?.id);
+
+    await assert.rejects(() => damageReportRepository.create({
+      ...input,
+      conversationId: crypto.randomUUID(),
+      providerCallId: "orphan-provider-call",
+    }));
+    const orphanCalls = await database.db
+      .select({ id: toolCalls.id })
+      .from(toolCalls)
+      .where(eq(toolCalls.providerCallId, "orphan-provider-call"));
+    assert.equal(orphanCalls.length, 0);
+  } finally {
+    if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
     await database.close();
   }
 });

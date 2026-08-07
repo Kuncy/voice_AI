@@ -104,6 +104,12 @@ h1 { margin: 12px 0 8px; font-size: clamp(42px, 7vw, 68px); letter-spacing: -.05
 .stop .button-icon { color: #ff716b; }
 .error-message { max-width: 520px; margin: 20px auto 0; color: #ff9e99; }
 .notice-message { max-width: 520px; margin: 20px auto 0; color: #bdf78f; }
+.tool-status { display: inline-flex; align-items: center; gap: 9px; margin: 18px auto 0; padding: 9px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.035); font-size: 13px; }
+.tool-status span { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; background: rgba(255,255,255,.08); font-weight: 800; }
+.tool-status-started span { animation: tool-spin 1s linear infinite; }
+.tool-status-succeeded { color: #bdf78f; border-color: rgba(189,247,143,.28); }
+.tool-status-failed { color: #ff9e99; border-color: rgba(255,158,153,.28); }
+@keyframes tool-spin { to { transform: rotate(360deg); } }
 
 .transcript-panel {
   margin-top: 54px;

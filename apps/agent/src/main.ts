@@ -1,25 +1,29 @@
-import { Agent, ServerOptions, cli, dedent, defineAgent, tts, voice } from "@livekit/agents";
+import { Agent, ServerOptions, cli, dedent, defineAgent, tts, voice, type llm } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import { getAgentEnv } from "@heyvera/config";
 import {
   composeAgentInstructions,
+  DamageReportService,
   fallbackAgentSnapshot,
   itemKey,
   readAgentSnapshot,
   type AgentSnapshotV1,
 } from "@heyvera/core";
-import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
+import { createDatabase, DrizzleConversationRepository, DrizzleDamageReportRepository } from "@heyvera/db";
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
+import { createDamageReportTool } from "./tools/create-damage-report.js";
 
 dotenv.config({ path: [".env.local", "../../.env.local", ".env"] });
 
 const env = getAgentEnv();
 const database = createDatabase(env.DATABASE_URL);
 const conversations = new DrizzleConversationRepository(database.db);
+const damageReportService = new DamageReportService(new DrizzleDamageReportRepository(database.db));
 const sessionNoticeTopic = "heyvera.session";
+const toolStatusTopic = "heyvera.tool-status";
 
 const endMessages: Record<SessionEndReason, string> = {
   idle_timeout: "Das Gespräch wurde wegen Inaktivität beendet.",
@@ -27,9 +31,10 @@ const endMessages: Record<SessionEndReason, string> = {
   max_turns: "Die maximale Anzahl an Gesprächsrunden wurde erreicht.",
 };
 
-function createVeraAgent(snapshot: AgentSnapshotV1) {
+function createVeraAgent(snapshot: AgentSnapshotV1, tools: llm.ToolContextLike) {
   return Agent.create({
     instructions: dedent`${composeAgentInstructions(snapshot)}`,
+    tools,
   });
 }
 
@@ -55,7 +60,7 @@ export default defineAgent({
       room: context.room.name,
       agent: agentSnapshot.name,
       tone: agentSnapshot.tone,
-      phase: 4,
+      phase: 5,
       conversationId,
     });
 
@@ -120,6 +125,19 @@ export default defineAgent({
       await context.room.localParticipant.publishData(
         new TextEncoder().encode(JSON.stringify(notice)),
         { reliable: true, topic: sessionNoticeTopic },
+      );
+    }
+
+    async function publishToolStatus(event: {
+      name: "create_damage_report";
+      status: "started" | "succeeded" | "failed";
+      damageReportId?: string;
+      code?: "VALIDATION_ERROR" | "PERSISTENCE_ERROR";
+    }): Promise<void> {
+      if (!context.room.isConnected || !context.room.localParticipant) return;
+      await context.room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(event)),
+        { reliable: true, topic: toolStatusTopic },
       );
     }
 
@@ -281,8 +299,11 @@ export default defineAgent({
       }
     });
 
+    const tools = conversationId
+      ? [createDamageReportTool({ conversationId, service: damageReportService, publishStatus: publishToolStatus })]
+      : [];
     await session.start({
-      agent: createVeraAgent(agentSnapshot),
+      agent: createVeraAgent(agentSnapshot, tools),
       room: context.room,
     });
     await context.connect();
