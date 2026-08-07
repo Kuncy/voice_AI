@@ -4,6 +4,7 @@ export const damageCategories = ["heating", "water", "electricity", "structural"
 export const damageUrgencies = ["low", "medium", "high", "emergency"] as const;
 
 export const createDamageReportInputSchema = z.object({
+  reporterName: z.string().trim().min(2).max(200).describe("Vollständiger Name der meldenden Person"),
   category: z.enum(damageCategories).describe("Art des Schadens"),
   description: z.string().trim().min(10).max(2_000).describe("Konkrete Beschreibung des Schadens"),
   urgency: z.enum(damageUrgencies).describe("Dringlichkeit des Schadens"),

@@ -161,6 +161,7 @@ test("damage report creation is transactional and idempotent by provider call id
       conversationId: conversation.id,
       providerCallId: "provider-call-1",
       report: {
+        reporterName: "Samaster",
         category: "water" as const,
         description: "Im Bad tritt Wasser unter dem Waschbecken aus.",
         urgency: "high" as const,
@@ -182,6 +183,7 @@ test("damage report creation is transactional and idempotent by provider call id
     assert.equal(savedCalls[0]?.status, "SUCCEEDED");
     assert.deepEqual(savedCalls[0]?.result, { ok: true, damageReportId: first.damageReportId, status: "open" });
     assert.equal(savedReports.length, 1);
+    assert.equal(savedReports[0]?.reporterName, input.report.reporterName);
     assert.equal(savedReports[0]?.category, "WATER");
     assert.equal(savedReports[0]?.urgency, "HIGH");
     assert.equal(savedReports[0]?.streetAndHouseNumber, input.report.streetAndHouseNumber);
@@ -192,6 +194,7 @@ test("damage report creation is transactional and idempotent by provider call id
     const detail = await conversationRepository.getDetail(conversation.id);
     assert.equal(detail?.toolCalls.length, 1);
     assert.equal(detail?.toolCalls[0]?.damageReportId, first.damageReportId);
+    assert.equal(detail?.toolCalls[0]?.damageReporterName, input.report.reporterName);
     assert.equal(detail?.toolCalls[0]?.damageDescription, input.report.description);
     assert.equal(detail?.toolCalls[0]?.damageStreetAndHouseNumber, input.report.streetAndHouseNumber);
     assert.equal(detail?.toolCalls[0]?.damagePostalCode, input.report.postalCode);

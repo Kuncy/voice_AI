@@ -77,6 +77,7 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
         .values({
           conversationId: input.conversationId,
           toolCallId: insertedCall.id,
+          reporterName: input.report.reporterName,
           category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
           description: input.report.description,
           urgency: input.report.urgency.toUpperCase() as Uppercase<CreateDamageReportInput["urgency"]>,
@@ -264,6 +265,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
           createdAt: toolCalls.createdAt,
           completedAt: toolCalls.completedAt,
           damageReportId: damageReports.id,
+          damageReporterName: damageReports.reporterName,
           damageCategory: damageReports.category,
           damageDescription: damageReports.description,
           damageUrgency: damageReports.urgency,

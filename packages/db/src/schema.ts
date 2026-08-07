@@ -107,6 +107,7 @@ export const damageReports = pgTable("damage_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
   conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  reporterName: text("reporter_name"),
   category: damageCategory("category").notNull(),
   description: text("description").notNull(),
   urgency: damageUrgency("urgency").notNull(),

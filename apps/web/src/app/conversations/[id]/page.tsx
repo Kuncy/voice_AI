@@ -141,6 +141,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
                       <div className="damage-report-title"><span>Schadensmeldung</span><strong>#{call.damageReportId.slice(0, 8)}</strong></div>
                       <p>{call.damageDescription}</p>
                       <dl>
+                        <div><dt>Gemeldet von</dt><dd>{call.damageReporterName ?? "Nicht erfasst"}</dd></div>
                         <div>
                           <dt>Objektadresse</dt>
                           <dd>

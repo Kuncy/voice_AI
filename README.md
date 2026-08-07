@@ -77,7 +77,7 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 
 ## Phase-5-Verifikation
 
-- `create_damage_report` verlangt Kategorie, konkrete Beschreibung, Dringlichkeit sowie Straße/Hausnummer, PLZ und Ort des betroffenen Objekts und darf erst nach ausdrücklicher Bestätigung aufgerufen werden.
+- `create_damage_report` verlangt den Namen der meldenden Person, Kategorie, konkrete Beschreibung, Dringlichkeit sowie Straße/Hausnummer, PLZ und Ort des betroffenen Objekts und darf erst nach ausdrücklicher Bestätigung aufgerufen werden.
 - `providerCallId` schützt den Schreibpfad gegen Wiederholungen. Tool Call und Damage Report werden gemeinsam in einer PostgreSQL-Transaktion gespeichert.
 - Das Tool liefert ausschließlich strukturierte Erfolgs- oder Fehlercodes; Vera bestätigt Erfolg erst nach einem erfolgreichen Commit.
 - Der Live-Status wird über `heyvera.tool-status` im Voice Screen als eigenes Badge angezeigt.
