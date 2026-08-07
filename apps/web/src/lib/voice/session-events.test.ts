@@ -29,6 +29,10 @@ test("accepts valid session notices and rejects malformed data", () => {
     parseSessionNotice(encoder.encode(JSON.stringify({ type: "session_ended", reason: "other" }))),
     undefined,
   );
+  assert.deepEqual(
+    parseSessionNotice(encoder.encode(JSON.stringify({ type: "session_finishing", message: "Bis gleich" }))),
+    { type: "session_finishing", message: "Bis gleich" },
+  );
 });
 
 test("accepts only known damage-report tool status events", () => {

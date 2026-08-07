@@ -9,6 +9,7 @@ export type SessionNoticePayload =
       reason: "idle_timeout" | "max_duration" | "max_turns";
       message: string;
     }
+  | { type: "session_finishing"; message: string }
   | { type: "provider_warning"; message: string };
 
 export function mapAgentState(state: string | undefined): VoiceState | undefined {
@@ -30,7 +31,10 @@ export function mapAgentState(state: string | undefined): VoiceState | undefined
 export function parseSessionNotice(payload: Uint8Array): SessionNoticePayload | undefined {
   try {
     const value = JSON.parse(new TextDecoder().decode(payload)) as Partial<SessionNoticePayload>;
-    if (value.type === "provider_warning" && typeof value.message === "string") {
+    if (
+      (value.type === "provider_warning" || value.type === "session_finishing") &&
+      typeof value.message === "string"
+    ) {
       return { type: value.type, message: value.message };
     }
     if (

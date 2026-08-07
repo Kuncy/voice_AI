@@ -1,6 +1,6 @@
 # HeyVera
 
-HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 5 ergänzt mit `create_damage_report` die erste persistente Business-Aktion: Vera sammelt Kategorie, Beschreibung und Dringlichkeit, bittet um Bestätigung und speichert anschließend genau eine Schadensmeldung. Agent-Einstellungen bleiben persistent und jedes Gespräch verwendet weiterhin einen unveränderlichen Konfigurations-Snapshot.
+HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 6 macht persistierte Conversations vollständig nachvollziehbar: Die History zeigt zeitgestempelte User-/Assistant-Nachrichten, Tool Calls, Agent-Snapshot und den gespeicherten Damage Report. Vera kann ein abgeschlossenes Gespräch nach einer kurzen Verabschiedung nun auch selbst beenden.
 
 Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das direkte Deepgram-Plugin für STT und TTS sowie das direkte OpenAI-Plugin für das LLM. Für Deepgram Flux STT und Aura‑2 TTS wird derselbe API-Key verwendet. LiveKit Inference und ElevenLabs sind im initialen Pfad bewusst nicht Bestandteil der Architektur, damit vorhandene Provider-Guthaben genutzt werden.
 
@@ -82,3 +82,12 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 - Das Tool liefert ausschließlich strukturierte Erfolgs- oder Fehlercodes; Vera bestätigt Erfolg erst nach einem erfolgreichen Commit.
 - Der Live-Status wird über `heyvera.tool-status` im Voice Screen als eigenes Badge angezeigt.
 - Unit-Tests prüfen Validierung, stabile Results und Toolstatus. Der echte PostgreSQL-Integrationstest prüft Transaktion, Relation und Idempotenz.
+
+## Phase-6-Verifikation
+
+- `/conversations` verlinkt jede Session auf eine serverseitig geladene Detailansicht.
+- Das Transcript wird nach persistierter Sequenz mit relativem Zeitstempel angezeigt; unterbrochene Assistant-Nachrichten sind markiert und der vollständig generierte Text bleibt optional aufklappbar.
+- Tool Calls zeigen Argumente, Ergebnis, Status und Laufzeit. Verknüpfte Damage Reports zeigen Kategorie, Dringlichkeit, Beschreibung und Status.
+- Agent-Name und Tonalität stammen aus dem unveränderlichen Conversation-Snapshot. Unbekannte Snapshot-Versionen werden mit Hinweis und Rohdaten dargestellt.
+- Eigene Loading-, Empty-, Not-Found- und Error-Zustände halten die History auch bei fehlenden oder ungültigen Daten verständlich.
+- Nach einer erfolgreichen Meldung fragt Vera, ob noch etwas offen ist. Bei einer klaren Verneinung spielt LiveKits `end_call`-Tool die Verabschiedung aus und beendet anschließend den Room.

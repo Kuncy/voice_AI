@@ -1,4 +1,4 @@
-import { Agent, ServerOptions, cli, dedent, defineAgent, tts, voice, type llm } from "@livekit/agents";
+import { Agent, ServerOptions, beta, cli, dedent, defineAgent, tts, voice, type llm } from "@livekit/agents";
 import * as deepgram from "@livekit/agents-plugin-deepgram";
 import * as openai from "@livekit/agents-plugin-openai";
 import { getAgentEnv } from "@heyvera/config";
@@ -60,7 +60,7 @@ export default defineAgent({
       room: context.room.name,
       agent: agentSnapshot.name,
       tone: agentSnapshot.tone,
-      phase: 5,
+      phase: 6,
       conversationId,
     });
 
@@ -119,6 +119,7 @@ export default defineAgent({
     async function publishNotice(
       notice:
         | { type: "session_ended"; reason: SessionEndReason; message: string }
+        | { type: "session_finishing"; message: string }
         | { type: "provider_warning"; message: string },
     ): Promise<void> {
       if (!context.room.isConnected || !context.room.localParticipant) return;
@@ -300,7 +301,19 @@ export default defineAgent({
     });
 
     const tools = conversationId
-      ? [createDamageReportTool({ conversationId, service: damageReportService, publishStatus: publishToolStatus })]
+      ? [
+          createDamageReportTool({ conversationId, service: damageReportService, publishStatus: publishToolStatus }),
+          beta.createEndCallTool({
+            deleteRoom: true,
+            extraDescription:
+              "Verwende dieses Tool nach einer Schadensmeldung erst, wenn der Nutzer auf die Abschlussfrage klar sagt, dass nichts mehr offen ist.",
+            endInstructions: "Verabschiede dich kurz und freundlich auf Deutsch.",
+            onToolCalled: async () => {
+              enqueuePersistence("agent_completed_finish", () => conversations.finish(conversationId, { status: "COMPLETED" }));
+              await publishNotice({ type: "session_finishing", message: "Vera beendet das Gespräch nach der Verabschiedung." });
+            },
+          }),
+        ]
       : [];
     await session.start({
       agent: createVeraAgent(agentSnapshot, tools),

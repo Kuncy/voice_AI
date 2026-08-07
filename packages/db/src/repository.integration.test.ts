@@ -183,6 +183,12 @@ test("damage report creation is transactional and idempotent by provider call id
     assert.equal(savedReports[0]?.urgency, "HIGH");
     assert.equal(savedReports[0]?.toolCallId, savedCalls[0]?.id);
 
+    const detail = await conversationRepository.getDetail(conversation.id);
+    assert.equal(detail?.toolCalls.length, 1);
+    assert.equal(detail?.toolCalls[0]?.damageReportId, first.damageReportId);
+    assert.equal(detail?.toolCalls[0]?.damageDescription, input.report.description);
+    assert.deepEqual(detail?.toolCalls[0]?.arguments, input.report);
+
     await assert.rejects(() => damageReportRepository.create({
       ...input,
       conversationId: crypto.randomUUID(),
