@@ -110,6 +110,9 @@ export const damageReports = pgTable("damage_reports", {
   category: damageCategory("category").notNull(),
   description: text("description").notNull(),
   urgency: damageUrgency("urgency").notNull(),
+  streetAndHouseNumber: text("street_and_house_number"),
+  postalCode: text("postal_code"),
+  city: text("city"),
   status: damageReportStatus("status").notNull().default("OPEN"),
   ...timestamps,
 });

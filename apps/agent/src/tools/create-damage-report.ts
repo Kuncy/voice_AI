@@ -21,7 +21,8 @@ export function createDamageReportTool(options: {
     name: "create_damage_report",
     description: `
 Speichert eine bestätigte Schadensmeldung.
-Rufe dieses Tool erst auf, wenn Kategorie, konkrete Beschreibung und Dringlichkeit vollständig sind,
+Rufe dieses Tool erst auf, wenn Kategorie, konkrete Beschreibung, Dringlichkeit, Straße mit Hausnummer,
+fünfstellige Postleitzahl und Ort des betroffenen Objekts vollständig sind,
 du alles kurz zusammengefasst hast und der Nutzer diese Zusammenfassung ausdrücklich bestätigt hat.
 Das Tool löst keinen Notruf und keine automatische Weiterleitung aus.
 `,

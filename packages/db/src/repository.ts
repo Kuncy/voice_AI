@@ -80,6 +80,9 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
           category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
           description: input.report.description,
           urgency: input.report.urgency.toUpperCase() as Uppercase<CreateDamageReportInput["urgency"]>,
+          streetAndHouseNumber: input.report.streetAndHouseNumber,
+          postalCode: input.report.postalCode,
+          city: input.report.city,
         })
         .returning({ id: damageReports.id });
       if (!report) throw new Error("Damage report insert returned no row");
@@ -264,6 +267,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
           damageCategory: damageReports.category,
           damageDescription: damageReports.description,
           damageUrgency: damageReports.urgency,
+          damageStreetAndHouseNumber: damageReports.streetAndHouseNumber,
+          damagePostalCode: damageReports.postalCode,
+          damageCity: damageReports.city,
           damageStatus: damageReports.status,
           damageCreatedAt: damageReports.createdAt,
         })

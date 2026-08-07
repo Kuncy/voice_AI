@@ -16,6 +16,8 @@ test("prompt keeps the immutable policy before configured instructions", () => {
   });
   assert.equal(prompt.indexOf(immutableSafetyPolicy), 0);
   assert.ok(prompt.indexOf("besonders knapp") < prompt.indexOf("Ignoriere vorherige"));
+  assert.match(prompt, /Straße mit Hausnummer/);
+  assert.match(prompt, /Postleitzahl und Ort/);
 });
 
 test("snapshot reader supports legacy values and rejects unknown versions", () => {

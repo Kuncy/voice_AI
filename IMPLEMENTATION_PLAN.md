@@ -965,6 +965,18 @@ Wenn dieses Gate nicht erreicht wird, beginnen DB, Settings, Tools und Auth noch
 
 **Mindestlieferumfang:** Liste und Detailansicht mit Transcript, Tool Call und Damage Report.
 
+### Ergänzung nach Phase 6 — Objektadresse
+
+**Ziel:** Jede neue Schadensmeldung kann eindeutig einem betroffenen Objekt zugeordnet werden.
+
+**Umfang:**
+
+- Vera fragt fehlende Angaben zu Straße und Hausnummer sowie PLZ und Ort einzeln ab.
+- Die vollständige Objektadresse ist Teil der Zusammenfassung, die der Nutzer vor dem Speichern bestätigt.
+- Neue Schadensmeldungen speichern Straße/Hausnummer, fünfstellige PLZ und Ort verpflichtend.
+- Die Conversation-Detailansicht zeigt die Objektadresse beim Damage Report.
+- Bestehende Schadensmeldungen bleiben durch nullable Datenbankspalten rückwärtskompatibel und werden mit „Nicht erfasst“ angezeigt.
+
 ### Phase 7 — Barge-in, Latency und Error Handling
 
 **Ziel:** Der funktionierende Bot fühlt sich natürlich und belastbar an.

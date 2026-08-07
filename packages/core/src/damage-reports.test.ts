@@ -6,6 +6,9 @@ const validReport = {
   category: "water" as const,
   description: "Wasser tritt unter dem Waschbecken aus.",
   urgency: "high" as const,
+  streetAndHouseNumber: "Musterstraße 12",
+  postalCode: "10115",
+  city: "Berlin",
 };
 
 test("damage report service validates before persistence", async () => {
@@ -22,6 +25,19 @@ test("damage report service validates before persistence", async () => {
     conversationId: crypto.randomUUID(),
     providerCallId: "call-invalid",
     report: { ...validReport, description: "zu kurz" },
+  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.equal(calls, 0);
+
+  assert.deepEqual(await service.create({
+    conversationId: crypto.randomUUID(),
+    providerCallId: "call-invalid-postal-code",
+    report: { ...validReport, postalCode: "1011" },
+  }), { ok: false, code: "VALIDATION_ERROR" });
+
+  assert.deepEqual(await service.create({
+    conversationId: crypto.randomUUID(),
+    providerCallId: "call-missing-house-number",
+    report: { ...validReport, streetAndHouseNumber: "Musterstraße" },
   }), { ok: false, code: "VALIDATION_ERROR" });
   assert.equal(calls, 0);
 });
