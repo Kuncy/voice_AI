@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
       runtimeSnapshot: {
         stt: "deepgram",
         sttModel: process.env.DEEPGRAM_STT_MODEL ?? "flux-general-multi",
+        eotThreshold: Number(process.env.DEEPGRAM_EOT_THRESHOLD ?? 0.75),
+        eotTimeoutMs: Number(process.env.DEEPGRAM_EOT_TIMEOUT_MS ?? 5_000),
         llm: "openai",
         llmModel: process.env.OPENAI_MODEL ?? "gpt-4.1",
         tts: "deepgram",
@@ -70,7 +72,9 @@ export async function POST(request: NextRequest) {
         idleTimeoutMs: Number(process.env.IDLE_TIMEOUT_MS ?? 60_000),
         maxTurns: Number(process.env.MAX_TURNS ?? 40),
         reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 60_000),
-        phase: 6,
+        interruptionMinDurationMs: Number(process.env.INTERRUPTION_MIN_DURATION_MS ?? 400),
+        interruptionMinWords: Number(process.env.INTERRUPTION_MIN_WORDS ?? 1),
+        phase: 7,
       },
     });
     conversationId = conversation.id;
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
       agents: [
         new RoomAgentDispatch({
           agentName: env.LIVEKIT_AGENT_NAME,
-          metadata: JSON.stringify({ phase: 6, conversationId: conversation.id }),
+          metadata: JSON.stringify({ phase: 7, conversationId: conversation.id }),
         }),
       ],
     });

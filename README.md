@@ -101,3 +101,22 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 - `/requests` fasst Schadensmeldungen, Terminwünsche und Nebenkostenanfragen in einer gemeinsamen Übersicht zusammen und verlinkt auf die jeweilige Conversation.
 - Name und Objektadresse werden für alle neuen Vorgänge strukturiert gespeichert. Terminanfragen enthalten zusätzlich den gewünschten Termin oder Zeitraum.
 - Schäden verwenden weiterhin `create_damage_report`; Termin- und Nebenkostenanfragen verwenden getrennt davon `create_service_request`.
+
+## Phase-7-Verifikation
+
+- LiveKit übernimmt kurze Netzwerkunterbrechungen automatisch und zeigt währenddessen einen verständlichen Reconnect-Zustand.
+- Nach einem terminalen Transportabbruch fordert der Browser über `/api/voice-sessions/reconnect` einen frischen 120-Sekunden-Token für dieselbe Conversation und denselben Room an. Das signierte Session-Handle wird dabei rotiert.
+- Abgelaufene Handles oder bereits abgeschlossene Conversations werden nicht wieder verbunden; der nächste Versuch startet bewusst eine neue Session.
+- Finale Transkripte können nicht durch verspätete Partial-Updates überschrieben oder in der Live-Ansicht umsortiert werden. Unterbrochene Assistant-Nachrichten bleiben in der History markiert.
+- Barge-in bleibt adaptiv aktiv. `INTERRUPTION_MIN_DURATION_MS` und `INTERRUPTION_MIN_WORDS` erlauben kontrolliertes Tuning ohne Codeänderung.
+- Deepgram-EOT ist über `DEEPGRAM_EOT_THRESHOLD` und `DEEPGRAM_EOT_TIMEOUT_MS` konfigurierbar. Die Defaults `0.75` und `5000 ms` bleiben bis zum manuellen deutschen Voice-Smoke-Test unverändert.
+- Strukturierte Latenzlogs enthalten Conversation-, Turn- und Korrelations-ID. Providerfehler unterscheiden Rate-Limits, Timeouts und sonstige Fehler, ohne interne Details im Browser offenzulegen.
+- Deepgram-TTS verwendet weiterhin genau einen Retry pro TTS-Instanz und anschließend das konfigurierte Fallback-Modell.
+
+Manueller Voice-Smoke-Test für Phase 7:
+
+1. Vera während einer längeren Antwort mit „Moment“ unterbrechen; die Audioausgabe muss stoppen und der neue Nutzerturn vollständig erscheinen.
+2. Innerhalb eines Satzes ein bis zwei Sekunden pausieren; Vera darf die Pause nicht als sicheren Abschluss behandeln.
+3. Eine normale kurze Antwort wie „ja“ geben; sie muss als finaler Turn ankommen, ohne einen laufenden Vera-Turn fälschlich zu unterbrechen.
+4. Während eines aktiven Gesprächs die Netzwerkverbindung kurz trennen. Zuerst muss der automatische SDK-Reconnect erscheinen; nach einem terminalen Abbruch muss „Verbindung wiederherstellen“ dieselbe Conversation fortsetzen.
+5. In der Conversation-History prüfen, dass unterbrochene Vera-Texte markiert sind und der vollständig generierte Resttext nur aufklappbar erscheint.

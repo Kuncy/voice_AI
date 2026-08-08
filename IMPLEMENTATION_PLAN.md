@@ -1026,6 +1026,15 @@ Wenn dieses Gate nicht erreicht wird, beginnen DB, Settings, Tools und Auth noch
 
 **Mindestlieferumfang:** Barge-in funktioniert, Reconnect funktioniert, Latenzwerte sind dokumentiert.
 
+**Umgesetzte Phase-7-Parameter:**
+
+- Deepgram EOT: `DEEPGRAM_EOT_THRESHOLD=0.75`, `DEEPGRAM_EOT_TIMEOUT_MS=5000`.
+- Adaptive Interruption: `INTERRUPTION_MIN_DURATION_MS=400`, `INTERRUPTION_MIN_WORDS=1`.
+- Terminaler Browser-Disconnect: frischer Token über `/api/voice-sessions/reconnect`, gleiches Session-Handle, gleiche Conversation und gleicher Room.
+- Providerfehler: strukturierte Klassifizierung in Rate-Limit, Timeout und sonstige Fehler; nutzerfreundlicher Hinweis ohne Providerdetails.
+- Transcript-Reconciliation: stabile Reihenfolge und Schutz finaler Segmente vor verspäteten Partial-Updates.
+- Latenzlogs: Conversation-, Turn- und Korrelations-ID für EOU, LLM, TTS und Time-to-first-audio.
+
 ### Phase 8 — Tests, Polish und README
 
 **Ziel:** Challenge ist reproduzierbar, präsentierbar und prüfbar.

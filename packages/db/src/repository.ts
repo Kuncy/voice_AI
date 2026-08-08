@@ -260,6 +260,16 @@ export class DrizzleConversationRepository implements ConversationRepository {
     return row?.agentSnapshot;
   }
 
+  public async getReconnectTarget(conversationId: string): Promise<{ roomName: string } | undefined> {
+    const [row] = await this.db
+      .select({ roomName: conversations.livekitRoomName, status: conversations.status })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    if (!row || !nonTerminalStatuses.includes(row.status as (typeof nonTerminalStatuses)[number])) return undefined;
+    return { roomName: row.roomName };
+  }
+
   public async markActive(conversationId: string): Promise<void> {
     await this.db
       .update(conversations)

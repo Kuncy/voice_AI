@@ -31,6 +31,7 @@ export interface VoiceTransport {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   readonly state: VoiceState;
+  readonly canReconnect: boolean;
   onTranscript(callback: (event: TranscriptEvent) => void): Unsubscribe;
   onNotice(callback: (event: SessionNotice) => void): Unsubscribe;
   onToolStatus(callback: (event: ToolStatusEvent) => void): Unsubscribe;

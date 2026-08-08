@@ -18,12 +18,14 @@ test("conversation lifecycle persists final messages idempotently and in order",
   const repository = new DrizzleConversationRepository(database.db);
   let conversationId: string | undefined;
   try {
+    const roomName = `integration-${crypto.randomUUID()}`;
     const created = await repository.create({
-      roomName: `integration-${crypto.randomUUID()}`,
+      roomName,
       runtimeSnapshot: { phase: 3, test: true },
     });
     conversationId = created.id;
     await repository.markActive(created.id);
+    assert.deepEqual(await repository.getReconnectTarget(created.id), { roomName });
 
     const first = await repository.appendFinalMessage(created.id, {
       externalItemId: "lk:user-1",
@@ -69,6 +71,7 @@ test("conversation lifecycle persists final messages idempotently and in order",
     assert.equal(savedConversation?.status, "COMPLETED");
     assert.equal(savedConversation?.failureCode, "SESSION_LIMIT");
     assert.ok((savedConversation?.durationMs ?? -1) >= 0);
+    assert.equal(await repository.getReconnectTarget(created.id), undefined);
   } finally {
     if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
     await database.close();

@@ -20,6 +20,7 @@ import {
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
+import { classifyProviderError, providerWarning } from "./session/provider-errors.js";
 import { createDamageReportTool } from "./tools/create-damage-report.js";
 import { createServiceRequestTool } from "./tools/create-service-request.js";
 
@@ -68,7 +69,7 @@ export default defineAgent({
       room: context.room.name,
       agent: agentSnapshot.name,
       tone: agentSnapshot.tone,
-      phase: 6,
+      phase: 7,
       conversationId,
     });
 
@@ -91,8 +92,8 @@ export default defineAgent({
         apiKey: env.DEEPGRAM_API_KEY,
         model: env.DEEPGRAM_STT_MODEL,
         languageHint: ["de"],
-        eotThreshold: 0.75,
-        eotTimeoutMs: 5_000,
+        eotThreshold: env.DEEPGRAM_EOT_THRESHOLD,
+        eotTimeoutMs: env.DEEPGRAM_EOT_TIMEOUT_MS,
       }),
       llm: new openai.responses.LLM({
         apiKey: env.OPENAI_API_KEY,
@@ -117,8 +118,8 @@ export default defineAgent({
         interruption: {
           enabled: true,
           mode: "adaptive",
-          minDuration: 400,
-          minWords: 1,
+          minDuration: env.INTERRUPTION_MIN_DURATION_MS,
+          minWords: env.INTERRUPTION_MIN_WORDS,
         },
       },
       userAwayTimeout: env.IDLE_TIMEOUT_MS / 1_000,
@@ -156,6 +157,12 @@ export default defineAgent({
     let assistantTurns = 0;
     let guardrailEndReason: SessionEndReason | undefined;
     const loggedTtsRequests = new Set<string>();
+    const metricContext = () => ({
+      room: context.room.name,
+      conversationId,
+      turn: guardrails.turns,
+      correlationId: `${conversationId ?? context.room.name}:${guardrails.turns}`,
+    });
     const guardrails = new SessionGuardrails({
       maxDurationMs: env.MAX_SESSION_MS,
       maxTurns: env.MAX_TURNS,
@@ -229,9 +236,8 @@ export default defineAgent({
       guardrails.onAgentStateChanged(event.newState);
       if (event.newState === "speaking" && lastFinalTranscriptAt) {
         console.info("agent_voice_latency", {
-          room: context.room.name,
+          ...metricContext(),
           timeToFirstAudioMs: event.createdAt - lastFinalTranscriptAt,
-          turn: guardrails.turns,
         });
         lastFinalTranscriptAt = undefined;
       }
@@ -242,11 +248,13 @@ export default defineAgent({
     session.on(voice.AgentSessionEventTypes.MetricsCollected, ({ metrics }) => {
       if (metrics.type === "eou_metrics") {
         console.info("agent_eou_metrics", {
+          ...metricContext(),
           endOfUtteranceDelayMs: metrics.endOfUtteranceDelayMs,
           transcriptionDelayMs: metrics.transcriptionDelayMs,
         });
       } else if (metrics.type === "llm_metrics") {
         console.info("agent_llm_metrics", {
+          ...metricContext(),
           ttftMs: metrics.ttftMs,
           durationMs: metrics.durationMs,
           totalTokens: metrics.totalTokens,
@@ -255,6 +263,8 @@ export default defineAgent({
         if (loggedTtsRequests.has(metrics.requestId)) return;
         loggedTtsRequests.add(metrics.requestId);
         console.info("agent_tts_metrics", {
+          ...metricContext(),
+          requestId: metrics.requestId,
           ttfbMs: metrics.ttfbMs,
           durationMs: metrics.durationMs,
           charactersCount: metrics.charactersCount,
@@ -262,12 +272,14 @@ export default defineAgent({
       }
     });
     session.on(voice.AgentSessionEventTypes.OverlappingSpeech, () => {
-      console.info("agent_barge_in_detected", { room: context.room.name });
+      console.info("agent_barge_in_detected", metricContext());
     });
     session.on(voice.AgentSessionEventTypes.Error, (event) => {
       const providerError = event.error as { message?: unknown; type?: unknown };
+      const classified = classifyProviderError(event.error);
       console.error("agent_provider_error", {
-        room: context.room.name,
+        ...metricContext(),
+        kind: classified.kind,
         type: typeof providerError.type === "string" ? providerError.type : "provider_error",
         message:
           typeof providerError.message === "string"
@@ -276,7 +288,7 @@ export default defineAgent({
       });
       void publishNotice({
         type: "provider_warning",
-        message: "Ein Sprachanbieter hatte kurzzeitig ein Problem. Vera versucht es erneut.",
+        message: providerWarning(classified.kind),
       }).catch(() => undefined);
     });
     session.on(voice.AgentSessionEventTypes.Close, (event) => {
@@ -334,9 +346,13 @@ export default defineAgent({
     console.info("agent_room_connected", {
       room: context.room.name,
       stt: env.DEEPGRAM_STT_MODEL,
+      eotThreshold: env.DEEPGRAM_EOT_THRESHOLD,
+      eotTimeoutMs: env.DEEPGRAM_EOT_TIMEOUT_MS,
       llm: env.OPENAI_MODEL,
       tts: agentSnapshot.ttsModel ?? env.DEEPGRAM_TTS_MODEL,
       ttsFallback: env.DEEPGRAM_TTS_FALLBACK_MODEL,
+      interruptionMinDurationMs: env.INTERRUPTION_MIN_DURATION_MS,
+      interruptionMinWords: env.INTERRUPTION_MIN_WORDS,
     });
     guardrails.start();
 

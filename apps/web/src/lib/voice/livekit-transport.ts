@@ -36,6 +36,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   private readonly noticeListeners = new Set<(event: SessionNotice) => void>();
   private readonly toolListeners = new Set<(event: ToolStatusEvent) => void>();
   private agentRequestedEnd = false;
+  private reconnectAvailable = false;
 
   public constructor(private readonly audioRoot: HTMLElement) {}
 
@@ -43,24 +44,37 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     return this.currentState;
   }
 
+  public get canReconnect(): boolean {
+    return this.reconnectAvailable;
+  }
+
   public async connect(): Promise<void> {
     if (this.room && this.room.state !== ConnectionState.Disconnected) return;
     this.setState("connecting");
     this.agentRequestedEnd = false;
+    const isReconnect = this.reconnectAvailable;
 
     try {
-      const response = await fetch("/api/voice-sessions", { method: "POST" });
+      const response = await fetch(
+        isReconnect ? "/api/voice-sessions/reconnect" : "/api/voice-sessions",
+        { method: "POST" },
+      );
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
+        if (isReconnect && (response.status === 401 || response.status === 409)) {
+          this.reconnectAvailable = false;
+        }
         throw new Error(body.error ?? "Voice-Session konnte nicht erstellt werden.");
       }
       const session = (await response.json()) as SessionResponse;
+      this.reconnectAvailable = true;
       const room = new Room({ adaptiveStream: true, dynacast: true });
       this.room = room;
       this.bindRoom(room);
       await room.startAudio();
       await room.connect(session.livekitUrl, session.token);
       await room.localParticipant.setMicrophoneEnabled(true);
+      this.reconnectAvailable = false;
       const agent = [...room.remoteParticipants.values()].find((participant) => participant.isAgent);
       if (!agent || !this.syncAgentState(agent)) this.setState("listening");
     } catch (error) {
@@ -78,6 +92,8 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       return;
     }
     this.setState("disconnecting");
+    this.agentRequestedEnd = true;
+    this.reconnectAvailable = false;
     await this.room.localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
     await fetch("/api/voice-sessions/end", { method: "POST", keepalive: true }).catch(() => undefined);
     await this.room.disconnect();
@@ -154,10 +170,13 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         }
         this.emitNotice({
           type: "provider_warning",
-          message: "Die Verbindung zu Vera wurde unterbrochen.",
+          message: "Vera ist nicht mehr verfügbar. Bitte starte ein neues Gespräch.",
         });
-        this.agentRequestedEnd = true;
-        void this.disconnect();
+        this.reconnectAvailable = false;
+        this.room = undefined;
+        this.audioRoot.replaceChildren();
+        this.setState("error");
+        void room.disconnect();
       })
       .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
         if (!participant?.isAgent) return;
@@ -182,7 +201,23 @@ export class LiveKitVoiceTransport implements VoiceTransport {
           void this.disconnect();
         }
       })
+      .on(RoomEvent.Reconnecting, () => {
+        if (this.agentRequestedEnd) return;
+        this.setState("connecting");
+        this.emitNotice({
+          type: "provider_warning",
+          message: "Die Verbindung ist instabil. Vera verbindet sich automatisch neu.",
+        });
+      })
+      .on(RoomEvent.Reconnected, () => {
+        if (this.agentRequestedEnd) return;
+        this.reconnectAvailable = false;
+        const agent = [...room.remoteParticipants.values()].find((participant) => participant.isAgent);
+        if (!agent || !this.syncAgentState(agent)) this.setState("listening");
+        this.emitNotice({ type: "provider_warning", message: "Die Verbindung wurde wiederhergestellt." });
+      })
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
+        if (this.room !== room) return;
         this.audioRoot.replaceChildren();
         if (this.agentRequestedEnd) {
           this.room = undefined;
@@ -194,6 +229,12 @@ export class LiveKitVoiceTransport implements VoiceTransport {
           this.currentState !== "disconnecting" &&
           reason !== DisconnectReason.CLIENT_INITIATED
         ) {
+          this.room = undefined;
+          this.reconnectAvailable = true;
+          this.emitNotice({
+            type: "provider_warning",
+            message: "Die Verbindung wurde getrennt. Du kannst dasselbe Gespräch wiederherstellen.",
+          });
           this.setState("error");
         }
       });

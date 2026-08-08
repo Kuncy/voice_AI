@@ -18,6 +18,8 @@ const agentEnvSchema = liveKitEnvSchema.extend({
   DEEPGRAM_API_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   DEEPGRAM_STT_MODEL: z.string().min(1).default("flux-general-multi"),
+  DEEPGRAM_EOT_THRESHOLD: z.coerce.number().min(0.5).max(0.95).default(0.75),
+  DEEPGRAM_EOT_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(10_000).default(5_000),
   DEEPGRAM_TTS_MODEL: z.string().min(1).default("aura-2-viktoria-de"),
   DEEPGRAM_TTS_FALLBACK_MODEL: z.string().min(1).default("aura-2-elara-de"),
   OPENAI_MODEL: z.string().min(1).default("gpt-4.1"),
@@ -25,6 +27,8 @@ const agentEnvSchema = liveKitEnvSchema.extend({
   IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   MAX_TURNS: z.coerce.number().int().positive().default(40),
   RECONNECT_GRACE_MS: z.coerce.number().int().nonnegative().default(60_000),
+  INTERRUPTION_MIN_DURATION_MS: z.coerce.number().int().min(100).max(2_000).default(400),
+  INTERRUPTION_MIN_WORDS: z.coerce.number().int().min(1).max(5).default(1),
   DATABASE_URL: z.string().min(1),
 });
 
