@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
+import { ReadableStream } from "node:stream/web";
 import test from "node:test";
 import type { llm } from "@livekit/agents";
-import { ReadableStream } from "node:stream/web";
 import { captureGeneratedText } from "./capture-generated-text";
 
 test("adds the complete generated text so interrupted items can retain text ahead of playout", async () => {

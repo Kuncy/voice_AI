@@ -13,7 +13,9 @@ export function DeleteConversationButton({ conversationId }: { conversationId: s
       }}
     >
       <input type="hidden" name="conversationId" value={conversationId} />
-      <button className="danger-button" type="submit">Conversation endgültig löschen</button>
+      <button className="danger-button" type="submit">
+        Conversation endgültig löschen
+      </button>
     </form>
   );
 }

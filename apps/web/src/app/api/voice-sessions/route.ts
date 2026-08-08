@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { RoomAgentDispatch, RoomConfiguration, TrackSource } from "@livekit/protocol";
 import { getRuntimeConfig, getWebEnv } from "@heyvera/config";
 import { DrizzleConversationRepository } from "@heyvera/db";
+import { RoomAgentDispatch, RoomConfiguration, TrackSource } from "@livekit/protocol";
 import { AccessToken } from "livekit-server-sdk";
-import { NextRequest, NextResponse } from "next/server";
-import { createSessionHandle } from "@/lib/session-handle";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { type NextRequest, NextResponse } from "next/server";
 import { getWebDatabase } from "@/lib/database";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { createSessionHandle } from "@/lib/session-handle";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -82,17 +82,24 @@ export async function POST(request: NextRequest) {
       livekitUrl: env.LIVEKIT_URL,
       roomName,
     });
-    response.cookies.set("heyvera_session", createSessionHandle({
-      conversationId: conversation.id,
-      roomName,
-      expiresAt: Date.now() + 15 * 60_000,
-    }, env.SESSION_SECRET), {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 15 * 60,
-      path: "/api/voice-sessions",
-    });
+    response.cookies.set(
+      "heyvera_session",
+      createSessionHandle(
+        {
+          conversationId: conversation.id,
+          roomName,
+          expiresAt: Date.now() + 15 * 60_000,
+        },
+        env.SESSION_SECRET,
+      ),
+      {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 15 * 60,
+        path: "/api/voice-sessions",
+      },
+    );
     return response;
   } catch (error) {
     if (conversationId && repository) {

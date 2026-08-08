@@ -1,5 +1,5 @@
-import type { FlushSentinel, llm } from "@livekit/agents";
 import { ReadableStream } from "node:stream/web";
+import type { FlushSentinel, llm } from "@livekit/agents";
 
 type LlmChunk = llm.ChatChunk | string | FlushSentinel;
 

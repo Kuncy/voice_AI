@@ -1,9 +1,9 @@
-import { llm } from "@livekit/agents";
 import {
-  createServiceRequestInputSchema,
   type CreateServiceRequestResult,
+  createServiceRequestInputSchema,
   type ServiceRequestService,
 } from "@heyvera/core";
+import { llm } from "@livekit/agents";
 
 export type PublishServiceRequestStatus = (event: {
   name: "create_service_request";
@@ -37,13 +37,19 @@ Das Tool bucht keinen Termin, prüft keine Nebenkostenabrechnung und verspricht 
         providerCallId: toolCallId,
         request,
       });
-      await options.publishStatus({
-        name: "create_service_request",
-        status: result.ok ? "succeeded" : "failed",
-        ...(result.ok ? { serviceRequestId: result.serviceRequestId } : { code: result.code }),
-      }).catch((error: unknown) => {
-        console.warn("agent_tool_status_publish_failed", { toolCallId, status: result.ok ? "succeeded" : "failed", error });
-      });
+      await options
+        .publishStatus({
+          name: "create_service_request",
+          status: result.ok ? "succeeded" : "failed",
+          ...(result.ok ? { serviceRequestId: result.serviceRequestId } : { code: result.code }),
+        })
+        .catch((error: unknown) => {
+          console.warn("agent_tool_status_publish_failed", {
+            toolCallId,
+            status: result.ok ? "succeeded" : "failed",
+            error,
+          });
+        });
       return result;
     },
   });

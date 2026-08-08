@@ -1,9 +1,9 @@
 import { getAdminEnv } from "@heyvera/config";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/lib/admin-password";
+import { safeAdminRedirect } from "@/lib/admin-redirect";
 import { adminSessionCookie, adminSessionTtlMs, createAdminSessionToken } from "@/lib/admin-session-token";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
-import { safeAdminRedirect } from "@/lib/admin-redirect";
 
 export async function POST(request: NextRequest) {
   const address = clientAddress(request);
@@ -29,15 +29,22 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.redirect(new URL(next, request.url), 303);
-  response.cookies.set(adminSessionCookie, createAdminSessionToken({
-    username: env.ADMIN_USERNAME,
-    expiresAt: Date.now() + adminSessionTtlMs,
-  }, env.SESSION_SECRET), {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: adminSessionTtlMs / 1_000,
-    path: "/",
-  });
+  response.cookies.set(
+    adminSessionCookie,
+    createAdminSessionToken(
+      {
+        username: env.ADMIN_USERNAME,
+        expiresAt: Date.now() + adminSessionTtlMs,
+      },
+      env.SESSION_SECRET,
+    ),
+    {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: adminSessionTtlMs / 1_000,
+      path: "/",
+    },
+  );
   return response;
 }

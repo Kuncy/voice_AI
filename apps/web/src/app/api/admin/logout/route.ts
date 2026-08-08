@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { adminSessionCookie } from "@/lib/admin-session-token";
 
 export async function POST(request: NextRequest) {

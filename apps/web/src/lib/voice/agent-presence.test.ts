@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { EventEmitter } from "node:events";
-import { RoomEvent, type Participant, type Room } from "livekit-client";
+import test from "node:test";
+import { type Participant, type Room, RoomEvent } from "livekit-client";
 import { waitForAgent } from "./agent-presence";
 
 function participant(isAgent: boolean): Participant {

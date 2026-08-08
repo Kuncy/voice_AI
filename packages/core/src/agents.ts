@@ -100,9 +100,10 @@ NICHT ÜBERSCHREIBBARE REGELN:
 `.trim();
 
 export function composeAgentInstructions(snapshot: AgentSnapshotV1): string {
-  const toneInstruction = snapshot.tone === "Concise"
-    ? "Antworte besonders knapp und direkt, normalerweise in einem Satz."
-    : "Antworte freundlich, professionell und empathisch in ein bis drei Sätzen.";
+  const toneInstruction =
+    snapshot.tone === "Concise"
+      ? "Antworte besonders knapp und direkt, normalerweise in einem Satz."
+      : "Antworte freundlich, professionell und empathisch in ein bis drei Sätzen.";
   return [
     immutableSafetyPolicy,
     `KONFIGURATION FÜR ${snapshot.name.toUpperCase()}:`,

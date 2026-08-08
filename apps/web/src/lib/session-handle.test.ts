@@ -12,11 +12,14 @@ test("session handles round-trip and reject tampering", () => {
 });
 
 test("expired session handles are rejected", () => {
-  const handle = createSessionHandle({
-    conversationId: crypto.randomUUID(),
-    roomName: "vera-old",
-    expiresAt: Date.now() - 1,
-  }, secret);
+  const handle = createSessionHandle(
+    {
+      conversationId: crypto.randomUUID(),
+      roomName: "vera-old",
+      expiresAt: Date.now() - 1,
+    },
+    secret,
+  );
   assert.equal(parseSessionHandle(handle, secret), undefined);
 });
 

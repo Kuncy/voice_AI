@@ -7,7 +7,9 @@ export default function ConversationNotFound() {
         <p className="eyebrow">NICHT GEFUNDEN</p>
         <h1>Diese Conversation existiert nicht.</h1>
         <p>Sie wurde möglicherweise entfernt oder die Adresse ist unvollständig.</p>
-        <Link className="state-link" href="/conversations">Zur Conversation-Liste</Link>
+        <Link className="state-link" href="/conversations">
+          Zur Conversation-Liste
+        </Link>
       </section>
     </main>
   );

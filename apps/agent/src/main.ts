@@ -1,15 +1,13 @@
-import { Agent, ServerOptions, beta, cli, dedent, defineAgent, tts, voice, type llm } from "@livekit/agents";
-import * as deepgram from "@livekit/agents-plugin-deepgram";
-import * as openai from "@livekit/agents-plugin-openai";
+import { fileURLToPath } from "node:url";
 import { getAgentEnv } from "@heyvera/config";
 import {
+  type AgentSnapshotV1,
   composeAgentInstructions,
   DamageReportService,
-  ServiceRequestService,
   fallbackAgentSnapshot,
   itemKey,
   readAgentSnapshot,
-  type AgentSnapshotV1,
+  ServiceRequestService,
 } from "@heyvera/core";
 import {
   createDatabase,
@@ -17,11 +15,13 @@ import {
   DrizzleDamageReportRepository,
   DrizzleServiceRequestRepository,
 } from "@heyvera/db";
+import { Agent, beta, cli, dedent, defineAgent, type llm, ServerOptions, tts, voice } from "@livekit/agents";
+import * as deepgram from "@livekit/agents-plugin-deepgram";
+import * as openai from "@livekit/agents-plugin-openai";
 import dotenv from "dotenv";
-import { fileURLToPath } from "node:url";
-import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
-import { classifyProviderError, providerWarning } from "./session/provider-errors.js";
 import { captureGeneratedText } from "./session/capture-generated-text.js";
+import { type SessionEndReason, SessionGuardrails } from "./session/guardrails.js";
+import { classifyProviderError, providerWarning } from "./session/provider-errors.js";
 import { createDamageReportTool } from "./tools/create-damage-report.js";
 import { createServiceRequestTool } from "./tools/create-service-request.js";
 
@@ -82,10 +82,11 @@ export default defineAgent({
     });
 
     let persistenceQueue = Promise.resolve();
-    const enqueuePersistence = (label: string, operation: () => Promise<unknown>) => {
+    const enqueuePersistence = (label: string, operation: (id: string) => Promise<unknown>) => {
       if (!conversationId) return;
+      const persistedConversationId = conversationId;
       persistenceQueue = persistenceQueue
-        .then(operation)
+        .then(() => operation(persistedConversationId))
         .then(() => undefined)
         .catch((error: unknown) => {
           console.error("agent_persistence_failed", { room: context.room.name, conversationId, label, error });
@@ -140,10 +141,10 @@ export default defineAgent({
         | { type: "provider_warning"; message: string },
     ): Promise<void> {
       if (!context.room.isConnected || !context.room.localParticipant) return;
-      await context.room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(notice)),
-        { reliable: true, topic: sessionNoticeTopic },
-      );
+      await context.room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(notice)), {
+        reliable: true,
+        topic: sessionNoticeTopic,
+      });
     }
 
     async function publishToolStatus(event: {
@@ -154,10 +155,10 @@ export default defineAgent({
       code?: "VALIDATION_ERROR" | "PERSISTENCE_ERROR";
     }): Promise<void> {
       if (!context.room.isConnected || !context.room.localParticipant) return;
-      await context.room.localParticipant.publishData(
-        new TextEncoder().encode(JSON.stringify(event)),
-        { reliable: true, topic: toolStatusTopic },
-      );
+      await context.room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(event)), {
+        reliable: true,
+        topic: toolStatusTopic,
+      });
     }
 
     let lastFinalTranscriptAt: number | undefined;
@@ -181,10 +182,12 @@ export default defineAgent({
           reason,
           turns: guardrails.turns,
         });
-        enqueuePersistence("guardrail_finish", () => conversations.finish(conversationId!, {
-          status: "COMPLETED",
-          failureCode: "SESSION_LIMIT",
-        }));
+        enqueuePersistence("guardrail_finish", (id) =>
+          conversations.finish(id, {
+            status: "COMPLETED",
+            failureCode: "SESSION_LIMIT",
+          }),
+        );
         void publishNotice({ type: "session_ended", reason, message: endMessages[reason] })
           .catch((error: unknown) => console.warn("agent_notice_publish_failed", { error }))
           .finally(() => void session.close());
@@ -200,19 +203,21 @@ export default defineAgent({
         turn: guardrails.onFinalUserTurn(),
         language: event.language,
       });
-      enqueuePersistence("user_message", () => conversations.appendFinalMessage(conversationId!, {
-        externalItemId: itemKey({
-          id: event.itemId,
+      enqueuePersistence("user_message", (id) =>
+        conversations.appendFinalMessage(id, {
+          externalItemId: itemKey({
+            id: event.itemId,
+            role: "USER",
+            turnIndex: finalUserTurns,
+            content: event.transcript,
+          }),
           role: "USER",
-          turnIndex: finalUserTurns,
           content: event.transcript,
+          isFinal: true,
+          startedAt: new Date(event.createdAt),
+          metadata: event.language ? { language: event.language } : undefined,
         }),
-        role: "USER",
-        content: event.transcript,
-        isFinal: true,
-        startedAt: new Date(event.createdAt),
-        metadata: event.language ? { language: event.language } : undefined,
-      }));
+      );
     });
     session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (event) => {
       const item = event.item;
@@ -220,20 +225,22 @@ export default defineAgent({
       const content = item.textContent?.trim();
       if (!content) return;
       assistantTurns += 1;
-      enqueuePersistence("assistant_message", () => conversations.appendFinalMessage(conversationId!, {
-        externalItemId: itemKey({
-          id: item.id,
+      enqueuePersistence("assistant_message", (id) =>
+        conversations.appendFinalMessage(id, {
+          externalItemId: itemKey({
+            id: item.id,
+            role: "ASSISTANT",
+            turnIndex: assistantTurns,
+            content,
+          }),
           role: "ASSISTANT",
-          turnIndex: assistantTurns,
           content,
+          isFinal: true,
+          wasInterrupted: item.interrupted,
+          startedAt: new Date(item.createdAt),
+          metadata: Object.keys(item.extra).length > 0 ? item.extra : undefined,
         }),
-        role: "ASSISTANT",
-        content,
-        isFinal: true,
-        wasInterrupted: item.interrupted,
-        startedAt: new Date(item.createdAt),
-        metadata: Object.keys(item.extra).length > 0 ? item.extra : undefined,
-      }));
+      );
     });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (event) => {
       guardrails.onAgentStateChanged(event.newState);
@@ -284,10 +291,7 @@ export default defineAgent({
         ...metricContext(),
         kind: classified.kind,
         type: typeof providerError.type === "string" ? providerError.type : "provider_error",
-        message:
-          typeof providerError.message === "string"
-            ? providerError.message
-            : "Voice provider request failed",
+        message: typeof providerError.message === "string" ? providerError.message : "Voice provider request failed",
       });
       void publishNotice({
         type: "provider_warning",
@@ -302,23 +306,29 @@ export default defineAgent({
         turns: guardrails.turns,
       });
       if (event.error || event.reason === voice.CloseReason.ERROR) {
-        enqueuePersistence("failed_finish", () => conversations.finish(conversationId!, {
-          status: "FAILED",
-          failureCode: "VOICE_PIPELINE_ERROR",
-        }));
+        enqueuePersistence("failed_finish", (id) =>
+          conversations.finish(id, {
+            status: "FAILED",
+            failureCode: "VOICE_PIPELINE_ERROR",
+          }),
+        );
       } else if (guardrailEndReason) {
-        enqueuePersistence("guardrail_close", () => conversations.finish(conversationId!, {
-          status: "COMPLETED",
-          failureCode: "SESSION_LIMIT",
-        }));
+        enqueuePersistence("guardrail_close", (id) =>
+          conversations.finish(id, {
+            status: "COMPLETED",
+            failureCode: "SESSION_LIMIT",
+          }),
+        );
       } else if (event.reason === voice.CloseReason.USER_INITIATED) {
-        enqueuePersistence("user_finish", () => conversations.finish(conversationId!, { status: "COMPLETED" }));
+        enqueuePersistence("user_finish", (id) => conversations.finish(id, { status: "COMPLETED" }));
       } else {
         const reconnectTimer = setTimeout(() => {
-          enqueuePersistence("abandoned_finish", () => conversations.finish(conversationId!, {
-            status: "ABANDONED",
-            failureCode: "RECONNECT_GRACE_EXPIRED",
-          }));
+          enqueuePersistence("abandoned_finish", (id) =>
+            conversations.finish(id, {
+              status: "ABANDONED",
+              failureCode: "RECONNECT_GRACE_EXPIRED",
+            }),
+          );
         }, env.RECONNECT_GRACE_MS);
         reconnectTimer.unref();
       }
@@ -327,15 +337,22 @@ export default defineAgent({
     const tools = conversationId
       ? [
           createDamageReportTool({ conversationId, service: damageReportService, publishStatus: publishToolStatus }),
-          createServiceRequestTool({ conversationId, service: serviceRequestService, publishStatus: publishToolStatus }),
+          createServiceRequestTool({
+            conversationId,
+            service: serviceRequestService,
+            publishStatus: publishToolStatus,
+          }),
           beta.createEndCallTool({
             deleteRoom: true,
             extraDescription:
               "Verwende dieses Tool nach einer gespeicherten Schadensmeldung oder Anfrage erst, wenn der Nutzer auf die Abschlussfrage klar sagt, dass nichts mehr offen ist.",
             endInstructions: "Verabschiede dich kurz und freundlich auf Deutsch.",
             onToolCalled: async () => {
-              enqueuePersistence("agent_completed_finish", () => conversations.finish(conversationId, { status: "COMPLETED" }));
-              await publishNotice({ type: "session_finishing", message: "Vera beendet das Gespräch nach der Verabschiedung." });
+              enqueuePersistence("agent_completed_finish", (id) => conversations.finish(id, { status: "COMPLETED" }));
+              await publishNotice({
+                type: "session_finishing",
+                message: "Vera beendet das Gespräch nach der Verabschiedung.",
+              });
             },
           }),
         ]
@@ -345,7 +362,7 @@ export default defineAgent({
       room: context.room,
     });
     await context.connect();
-    enqueuePersistence("mark_active", () => conversations.markActive(conversationId!));
+    enqueuePersistence("mark_active", (id) => conversations.markActive(id));
     console.info("agent_room_connected", {
       room: context.room.name,
       stt: env.DEEPGRAM_STT_MODEL,

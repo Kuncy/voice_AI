@@ -15,11 +15,16 @@
     "db:sweep": "pnpm --filter @heyvera/db exec tsx ../../scripts/sweep-stale-conversations.ts",
     "db:prune": "pnpm --filter @heyvera/db exec tsx ../../scripts/prune-conversation-data.ts",
     "auth:hash": "node scripts/hash-admin-password.mjs",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "quality": "pnpm format:check && pnpm lint && pnpm typecheck",
     "start": "turbo start",
     "test": "turbo test",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.7",
     "turbo": "2.10.8",
     "typescript": "5.9.3"
   }

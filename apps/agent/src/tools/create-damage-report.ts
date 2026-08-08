@@ -1,9 +1,5 @@
+import { type CreateDamageReportResult, createDamageReportInputSchema, type DamageReportService } from "@heyvera/core";
 import { llm } from "@livekit/agents";
-import {
-  createDamageReportInputSchema,
-  type CreateDamageReportResult,
-  type DamageReportService,
-} from "@heyvera/core";
 
 export type PublishToolStatus = (event: {
   name: "create_damage_report";
@@ -39,13 +35,19 @@ Das Tool löst keinen Notruf und keine automatische Weiterleitung aus.
         providerCallId: toolCallId,
         report,
       });
-      await options.publishStatus({
-        name: "create_damage_report",
-        status: result.ok ? "succeeded" : "failed",
-        ...(result.ok ? { damageReportId: result.damageReportId } : { code: result.code }),
-      }).catch((error: unknown) => {
-        console.warn("agent_tool_status_publish_failed", { toolCallId, status: result.ok ? "succeeded" : "failed", error });
-      });
+      await options
+        .publishStatus({
+          name: "create_damage_report",
+          status: result.ok ? "succeeded" : "failed",
+          ...(result.ok ? { damageReportId: result.damageReportId } : { code: result.code }),
+        })
+        .catch((error: unknown) => {
+          console.warn("agent_tool_status_publish_failed", {
+            toolCallId,
+            status: result.ok ? "succeeded" : "failed",
+            error,
+          });
+        });
       console.info("agent_tool_completed", {
         toolCallId,
         conversationId: options.conversationId,

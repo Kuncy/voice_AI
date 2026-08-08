@@ -3,7 +3,8 @@ export type ProviderErrorKind = "rate_limit" | "timeout" | "other";
 export function classifyProviderError(error: unknown): { kind: ProviderErrorKind; message: string } {
   const value = error as { message?: unknown; status?: unknown; statusCode?: unknown; code?: unknown } | undefined;
   const rawMessage = typeof value?.message === "string" ? value.message : "Voice provider request failed";
-  const searchable = `${rawMessage} ${String(value?.status ?? "")} ${String(value?.statusCode ?? "")} ${String(value?.code ?? "")}`.toLowerCase();
+  const searchable =
+    `${rawMessage} ${String(value?.status ?? "")} ${String(value?.statusCode ?? "")} ${String(value?.code ?? "")}`.toLowerCase();
   if (/\b429\b|rate.?limit|too many requests|quota/.test(searchable)) {
     return { kind: "rate_limit", message: rawMessage };
   }

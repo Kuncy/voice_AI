@@ -13,12 +13,17 @@ import { conversations, damageReports, messages, serviceRequests, toolCalls } fr
 
 const databaseUrl = process.env.DATABASE_URL;
 
+function requireDatabaseUrl(): string {
+  if (!databaseUrl) throw new Error("DATABASE_URL is required for database integration tests");
+  return databaseUrl;
+}
+
 if (process.env.CI && !databaseUrl && process.env.SKIP_DATABASE_INTEGRATION_TESTS !== "1") {
   throw new Error("DATABASE_URL is required in CI; set SKIP_DATABASE_INTEGRATION_TESTS=1 to opt out explicitly");
 }
 
 test("conversation lifecycle persists final messages idempotently and in order", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const repository = new DrizzleConversationRepository(database.db);
   let conversationId: string | undefined;
   try {
@@ -83,7 +88,7 @@ test("conversation lifecycle persists final messages idempotently and in order",
 });
 
 test("stale active conversations become abandoned", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const repository = new DrizzleConversationRepository(database.db);
   let conversationId: string | undefined;
   try {
@@ -120,7 +125,7 @@ test("stale active conversations become abandoned", { skip: !databaseUrl }, asyn
 });
 
 test("new settings affect only new conversation snapshots", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const agentRepository = new DrizzleAgentRepository(database.db);
   const conversationRepository = new DrizzleConversationRepository(database.db);
   const original = await agentRepository.get();
@@ -142,8 +147,8 @@ test("new settings affect only new conversation snapshots", { skip: !databaseUrl
     });
     conversationIds.push(after.id);
 
-    const beforeSnapshot = await conversationRepository.getAgentSnapshot(before.id) as { tone?: unknown };
-    const afterSnapshot = await conversationRepository.getAgentSnapshot(after.id) as { tone?: unknown };
+    const beforeSnapshot = (await conversationRepository.getAgentSnapshot(before.id)) as { tone?: unknown };
+    const afterSnapshot = (await conversationRepository.getAgentSnapshot(after.id)) as { tone?: unknown };
     assert.equal(beforeSnapshot.tone, original.tone);
     assert.equal(afterSnapshot.tone, "Concise");
   } finally {
@@ -160,7 +165,7 @@ test("new settings affect only new conversation snapshots", { skip: !databaseUrl
 });
 
 test("damage report creation is transactional and idempotent by provider call id", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const conversationRepository = new DrizzleConversationRepository(database.db);
   const damageReportRepository = new DrizzleDamageReportRepository(database.db);
   let conversationId: string | undefined;
@@ -189,7 +194,10 @@ test("damage report creation is transactional and idempotent by provider call id
       damageReportRepository.create(input),
     ]);
     const savedCalls = await database.db.select().from(toolCalls).where(eq(toolCalls.conversationId, conversation.id));
-    const savedReports = await database.db.select().from(damageReports).where(eq(damageReports.conversationId, conversation.id));
+    const savedReports = await database.db
+      .select()
+      .from(damageReports)
+      .where(eq(damageReports.conversationId, conversation.id));
 
     assert.deepEqual(retry, first);
     assert.equal(savedCalls.length, 1);
@@ -214,11 +222,13 @@ test("damage report creation is transactional and idempotent by provider call id
     assert.equal(detail?.toolCalls[0]?.damageCity, input.report.city);
     assert.deepEqual(detail?.toolCalls[0]?.arguments, input.report);
 
-    await assert.rejects(() => damageReportRepository.create({
-      ...input,
-      conversationId: crypto.randomUUID(),
-      providerCallId: "orphan-provider-call",
-    }));
+    await assert.rejects(() =>
+      damageReportRepository.create({
+        ...input,
+        conversationId: crypto.randomUUID(),
+        providerCallId: "orphan-provider-call",
+      }),
+    );
     const orphanCalls = await database.db
       .select({ id: toolCalls.id })
       .from(toolCalls)
@@ -230,8 +240,10 @@ test("damage report creation is transactional and idempotent by provider call id
   }
 });
 
-test("failed intake writes remain auditable and terminal conversations can be deleted", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+test("failed intake writes remain auditable and terminal conversations can be deleted", {
+  skip: !databaseUrl,
+}, async () => {
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const conversationsRepository = new DrizzleConversationRepository(database.db);
   const reports = new DrizzleDamageReportRepository(database.db);
   let conversationId: string | undefined;
@@ -241,27 +253,26 @@ test("failed intake writes remain auditable and terminal conversations can be de
       runtimeSnapshot: { phase: 7, test: true },
     });
     conversationId = created.id;
-    await assert.rejects(reports.create({
-      conversationId: created.id,
-      providerCallId: "failed-provider-call",
-      report: {
-        reporterName: "Test Person",
-        category: "not-a-category" as "heating",
-        description: "Erzwingt einen Datenbankfehler nach Beginn des Tool-Aufrufs.",
-        urgency: "low",
-        streetAndHouseNumber: "Teststraße 1",
-        postalCode: "10115",
-        city: "Berlin",
-      },
-    }));
+    await assert.rejects(
+      reports.create({
+        conversationId: created.id,
+        providerCallId: "failed-provider-call",
+        report: {
+          reporterName: "Test Person",
+          category: "not-a-category" as "heating",
+          description: "Erzwingt einen Datenbankfehler nach Beginn des Tool-Aufrufs.",
+          urgency: "low",
+          streetAndHouseNumber: "Teststraße 1",
+          postalCode: "10115",
+          city: "Berlin",
+        },
+      }),
+    );
 
     const [failedCall] = await database.db
       .select({ status: toolCalls.status, errorCode: toolCalls.errorCode })
       .from(toolCalls)
-      .where(and(
-        eq(toolCalls.conversationId, created.id),
-        eq(toolCalls.providerCallId, "failed-provider-call"),
-      ));
+      .where(and(eq(toolCalls.conversationId, created.id), eq(toolCalls.providerCallId, "failed-provider-call")));
     assert.deepEqual(failedCall, { status: "FAILED", errorCode: "PERSISTENCE_ERROR" });
 
     assert.equal(await conversationsRepository.delete(created.id), false);
@@ -274,8 +285,10 @@ test("failed intake writes remain auditable and terminal conversations can be de
   }
 });
 
-test("service requests are transactional, idempotent and included in the intake overview", { skip: !databaseUrl }, async () => {
-  const database = createDatabase(databaseUrl!, { max: 2 });
+test("service requests are transactional, idempotent and included in the intake overview", {
+  skip: !databaseUrl,
+}, async () => {
+  const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const conversationRepository = new DrizzleConversationRepository(database.db);
   const serviceRequestRepository = new DrizzleServiceRequestRepository(database.db);
   let conversationId: string | undefined;
@@ -303,7 +316,9 @@ test("service requests are transactional, idempotent and included in the intake 
     const retry = await serviceRequestRepository.create(input);
     assert.deepEqual(retry, first);
 
-    const saved = await database.db.select().from(serviceRequests)
+    const saved = await database.db
+      .select()
+      .from(serviceRequests)
       .where(eq(serviceRequests.conversationId, conversation.id));
     assert.equal(saved.length, 1);
     assert.equal(saved[0]?.requestType, "APPOINTMENT");

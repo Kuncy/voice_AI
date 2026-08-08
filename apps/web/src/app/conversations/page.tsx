@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { readAgentSnapshotForHistory } from "@heyvera/core";
 import { DrizzleConversationRepository } from "@heyvera/db";
+import Link from "next/link";
+import { LogoutButton } from "@/components/admin/logout-button";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getWebDatabase } from "@/lib/database";
-import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +20,16 @@ export default async function ConversationsPage() {
   return (
     <main className="history-shell">
       <nav className="nav">
-        <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
-        <Link className="nav-link" href="/settings">Settings</Link>
-        <Link className="nav-link" href="/requests">Vorgänge</Link>
+        <Link className="brand-link" href="/">
+          <span className="brand-mark">V</span>
+          <span className="brand">HeyVera</span>
+        </Link>
+        <Link className="nav-link" href="/settings">
+          Settings
+        </Link>
+        <Link className="nav-link" href="/requests">
+          Vorgänge
+        </Link>
         <LogoutButton />
         <span className="phase-badge">Phase 6 · History</span>
       </nav>
@@ -32,22 +39,47 @@ export default async function ConversationsPage() {
         <p className="history-intro">Persistierte Voice-Sessions, neueste zuerst.</p>
         <div className="history-table-wrap">
           <table className="history-table">
-            <thead><tr><th>Zeitpunkt</th><th>Agent</th><th>Status</th><th>Dauer</th><th>Fehlercode</th><th /></tr></thead>
+            <thead>
+              <tr>
+                <th>Zeitpunkt</th>
+                <th>Agent</th>
+                <th>Status</th>
+                <th>Dauer</th>
+                <th>Fehlercode</th>
+                <th />
+              </tr>
+            </thead>
             <tbody>
               {rows.map((row) => {
                 const agent = readAgentSnapshotForHistory(row.agentSnapshot);
                 return (
                   <tr key={row.id}>
-                    <td><Link className="history-primary-link" href={`/conversations/${row.id}`}>{row.createdAt.toLocaleString("de-DE")}</Link></td>
+                    <td>
+                      <Link className="history-primary-link" href={`/conversations/${row.id}`}>
+                        {row.createdAt.toLocaleString("de-DE")}
+                      </Link>
+                    </td>
                     <td>{agent.supported ? agent.snapshot.name : "Unbekannter Snapshot"}</td>
-                    <td><span className={`status-pill status-${row.status.toLowerCase()}`}>{row.status}</span></td>
+                    <td>
+                      <span className={`status-pill status-${row.status.toLowerCase()}`}>{row.status}</span>
+                    </td>
                     <td>{duration(row.durationMs)}</td>
                     <td>{row.failureCode ?? "–"}</td>
-                    <td><Link className="history-detail-link" href={`/conversations/${row.id}`}>Ansehen →</Link></td>
+                    <td>
+                      <Link className="history-detail-link" href={`/conversations/${row.id}`}>
+                        Ansehen →
+                      </Link>
+                    </td>
                   </tr>
                 );
               })}
-              {rows.length === 0 && <tr><td className="history-empty" colSpan={6}>Noch keine Conversations gespeichert.</td></tr>}
+              {rows.length === 0 && (
+                <tr>
+                  <td className="history-empty" colSpan={6}>
+                    Noch keine Conversations gespeichert.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -21,19 +21,22 @@ test("service request tool persists appointment data and publishes status", asyn
     },
   });
 
-  const result = await tool.execute({
-    requestType: "appointment",
-    reporterName: "Erika Muster",
-    description: "Ich benötige einen Termin zur Besichtigung der Heizkörper.",
-    streetAndHouseNumber: "Musterstraße 12",
-    postalCode: "10115",
-    city: "Berlin",
-    preferredTimeframe: "Montagvormittag",
-  }, {
-    toolCallId: "service-call-42",
-    ctx: {} as never,
-    abortSignal: new AbortController().signal,
-  });
+  const result = await tool.execute(
+    {
+      requestType: "appointment",
+      reporterName: "Erika Muster",
+      description: "Ich benötige einen Termin zur Besichtigung der Heizkörper.",
+      streetAndHouseNumber: "Musterstraße 12",
+      postalCode: "10115",
+      city: "Berlin",
+      preferredTimeframe: "Montagvormittag",
+    },
+    {
+      toolCallId: "service-call-42",
+      ctx: {} as never,
+      abortSignal: new AbortController().signal,
+    },
+  );
 
   assert.equal(savedType, "appointment");
   assert.deepEqual(result, { ok: true, serviceRequestId, status: "open" });

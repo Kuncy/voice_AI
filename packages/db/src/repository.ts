@@ -1,11 +1,11 @@
 import {
-  createAgentSnapshot,
-  agentSettingsSchema,
   type AgentSettings,
+  agentSettingsSchema,
   type ConversationRepository,
   type ConversationTerminalUpdate,
   type CreateDamageReportInput,
   type CreateServiceRequestInput,
+  createAgentSnapshot,
   type DamageReportRepository,
   type FinalMessage,
   type ServiceRequestRepository,
@@ -83,60 +83,62 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
     const startedAt = new Date();
     try {
       return await this.db.transaction(async (tx) => {
-      const [insertedCall] = await tx
-        .insert(toolCalls)
-        .values({
-          conversationId: input.conversationId,
-          providerCallId: input.providerCallId,
-          toolName: "create_damage_report",
-          arguments: input.report,
-        })
-        .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
-        .returning({ id: toolCalls.id });
+        const [insertedCall] = await tx
+          .insert(toolCalls)
+          .values({
+            conversationId: input.conversationId,
+            providerCallId: input.providerCallId,
+            toolName: "create_damage_report",
+            arguments: input.report,
+          })
+          .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
+          .returning({ id: toolCalls.id });
 
-      if (!insertedCall) {
-        const [existing] = await tx
-          .select({ damageReportId: damageReports.id, status: damageReports.status })
-          .from(toolCalls)
-          .innerJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
-          .where(and(
-            eq(toolCalls.conversationId, input.conversationId),
-            eq(toolCalls.providerCallId, input.providerCallId),
-          ))
-          .limit(1);
-        if (!existing || existing.status !== "OPEN") {
-          throw new Error("Existing damage report tool call has no open report");
+        if (!insertedCall) {
+          const [existing] = await tx
+            .select({ damageReportId: damageReports.id, status: damageReports.status })
+            .from(toolCalls)
+            .innerJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
+            .where(
+              and(
+                eq(toolCalls.conversationId, input.conversationId),
+                eq(toolCalls.providerCallId, input.providerCallId),
+              ),
+            )
+            .limit(1);
+          if (existing?.status !== "OPEN") {
+            throw new Error("Existing damage report tool call has no open report");
+          }
+          return { damageReportId: existing.damageReportId, status: "open" };
         }
-        return { damageReportId: existing.damageReportId, status: "open" };
-      }
 
-      const [report] = await tx
-        .insert(damageReports)
-        .values({
-          conversationId: input.conversationId,
-          toolCallId: insertedCall.id,
-          reporterName: input.report.reporterName,
-          category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
-          description: input.report.description,
-          urgency: input.report.urgency.toUpperCase() as Uppercase<CreateDamageReportInput["urgency"]>,
-          streetAndHouseNumber: input.report.streetAndHouseNumber,
-          postalCode: input.report.postalCode,
-          city: input.report.city,
-        })
-        .returning({ id: damageReports.id });
-      if (!report) throw new Error("Damage report insert returned no row");
+        const [report] = await tx
+          .insert(damageReports)
+          .values({
+            conversationId: input.conversationId,
+            toolCallId: insertedCall.id,
+            reporterName: input.report.reporterName,
+            category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
+            description: input.report.description,
+            urgency: input.report.urgency.toUpperCase() as Uppercase<CreateDamageReportInput["urgency"]>,
+            streetAndHouseNumber: input.report.streetAndHouseNumber,
+            postalCode: input.report.postalCode,
+            city: input.report.city,
+          })
+          .returning({ id: damageReports.id });
+        if (!report) throw new Error("Damage report insert returned no row");
 
-      const result = { ok: true, damageReportId: report.id, status: "open" as const };
-      const completedAt = new Date();
-      await tx
-        .update(toolCalls)
-        .set({
-          result,
-          status: "SUCCEEDED",
-          durationMs: completedAt.getTime() - startedAt.getTime(),
-          completedAt,
-        })
-        .where(eq(toolCalls.id, insertedCall.id));
+        const result = { ok: true, damageReportId: report.id, status: "open" as const };
+        const completedAt = new Date();
+        await tx
+          .update(toolCalls)
+          .set({
+            result,
+            status: "SUCCEEDED",
+            durationMs: completedAt.getTime() - startedAt.getTime(),
+            completedAt,
+          })
+          .where(eq(toolCalls.id, insertedCall.id));
         return { damageReportId: report.id, status: "open" };
       });
     } catch (error) {
@@ -165,60 +167,62 @@ export class DrizzleServiceRequestRepository implements ServiceRequestRepository
     const startedAt = new Date();
     try {
       return await this.db.transaction(async (tx) => {
-      const [insertedCall] = await tx
-        .insert(toolCalls)
-        .values({
-          conversationId: input.conversationId,
-          providerCallId: input.providerCallId,
-          toolName: "create_service_request",
-          arguments: input.request,
-        })
-        .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
-        .returning({ id: toolCalls.id });
+        const [insertedCall] = await tx
+          .insert(toolCalls)
+          .values({
+            conversationId: input.conversationId,
+            providerCallId: input.providerCallId,
+            toolName: "create_service_request",
+            arguments: input.request,
+          })
+          .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
+          .returning({ id: toolCalls.id });
 
-      if (!insertedCall) {
-        const [existing] = await tx
-          .select({ serviceRequestId: serviceRequests.id, status: serviceRequests.status })
-          .from(toolCalls)
-          .innerJoin(serviceRequests, eq(serviceRequests.toolCallId, toolCalls.id))
-          .where(and(
-            eq(toolCalls.conversationId, input.conversationId),
-            eq(toolCalls.providerCallId, input.providerCallId),
-          ))
-          .limit(1);
-        if (!existing || existing.status !== "OPEN") {
-          throw new Error("Existing service request tool call has no open request");
+        if (!insertedCall) {
+          const [existing] = await tx
+            .select({ serviceRequestId: serviceRequests.id, status: serviceRequests.status })
+            .from(toolCalls)
+            .innerJoin(serviceRequests, eq(serviceRequests.toolCallId, toolCalls.id))
+            .where(
+              and(
+                eq(toolCalls.conversationId, input.conversationId),
+                eq(toolCalls.providerCallId, input.providerCallId),
+              ),
+            )
+            .limit(1);
+          if (existing?.status !== "OPEN") {
+            throw new Error("Existing service request tool call has no open request");
+          }
+          return { serviceRequestId: existing.serviceRequestId, status: "open" };
         }
-        return { serviceRequestId: existing.serviceRequestId, status: "open" };
-      }
 
-      const [request] = await tx
-        .insert(serviceRequests)
-        .values({
-          conversationId: input.conversationId,
-          toolCallId: insertedCall.id,
-          requestType: input.request.requestType.toUpperCase() as Uppercase<CreateServiceRequestInput["requestType"]>,
-          reporterName: input.request.reporterName,
-          description: input.request.description,
-          streetAndHouseNumber: input.request.streetAndHouseNumber,
-          postalCode: input.request.postalCode,
-          city: input.request.city,
-          preferredTimeframe: input.request.preferredTimeframe,
-        })
-        .returning({ id: serviceRequests.id });
-      if (!request) throw new Error("Service request insert returned no row");
+        const [request] = await tx
+          .insert(serviceRequests)
+          .values({
+            conversationId: input.conversationId,
+            toolCallId: insertedCall.id,
+            requestType: input.request.requestType.toUpperCase() as Uppercase<CreateServiceRequestInput["requestType"]>,
+            reporterName: input.request.reporterName,
+            description: input.request.description,
+            streetAndHouseNumber: input.request.streetAndHouseNumber,
+            postalCode: input.request.postalCode,
+            city: input.request.city,
+            preferredTimeframe: input.request.preferredTimeframe,
+          })
+          .returning({ id: serviceRequests.id });
+        if (!request) throw new Error("Service request insert returned no row");
 
-      const result = { ok: true, serviceRequestId: request.id, status: "open" as const };
-      const completedAt = new Date();
-      await tx
-        .update(toolCalls)
-        .set({
-          result,
-          status: "SUCCEEDED",
-          durationMs: completedAt.getTime() - startedAt.getTime(),
-          completedAt,
-        })
-        .where(eq(toolCalls.id, insertedCall.id));
+        const result = { ok: true, serviceRequestId: request.id, status: "open" as const };
+        const completedAt = new Date();
+        await tx
+          .update(toolCalls)
+          .set({
+            result,
+            status: "SUCCEEDED",
+            durationMs: completedAt.getTime() - startedAt.getTime(),
+            completedAt,
+          })
+          .where(eq(toolCalls.id, insertedCall.id));
         return { serviceRequestId: request.id, status: "open" };
       });
     } catch (error) {
@@ -241,47 +245,54 @@ export class DrizzleIntakeRepository {
 
   public async list(limit = 100) {
     const [damageRows, serviceRows] = await Promise.all([
-      this.db.select({
-        id: damageReports.id,
-        conversationId: damageReports.conversationId,
-        reporterName: damageReports.reporterName,
-        description: damageReports.description,
-        streetAndHouseNumber: damageReports.streetAndHouseNumber,
-        postalCode: damageReports.postalCode,
-        city: damageReports.city,
-        status: damageReports.status,
-        urgency: damageReports.urgency,
-        createdAt: damageReports.createdAt,
-      }).from(damageReports).orderBy(desc(damageReports.createdAt)).limit(limit),
-      this.db.select({
-        id: serviceRequests.id,
-        conversationId: serviceRequests.conversationId,
-        requestType: serviceRequests.requestType,
-        reporterName: serviceRequests.reporterName,
-        description: serviceRequests.description,
-        streetAndHouseNumber: serviceRequests.streetAndHouseNumber,
-        postalCode: serviceRequests.postalCode,
-        city: serviceRequests.city,
-        preferredTimeframe: serviceRequests.preferredTimeframe,
-        status: serviceRequests.status,
-        createdAt: serviceRequests.createdAt,
-      }).from(serviceRequests).orderBy(desc(serviceRequests.createdAt)).limit(limit),
+      this.db
+        .select({
+          id: damageReports.id,
+          conversationId: damageReports.conversationId,
+          reporterName: damageReports.reporterName,
+          description: damageReports.description,
+          streetAndHouseNumber: damageReports.streetAndHouseNumber,
+          postalCode: damageReports.postalCode,
+          city: damageReports.city,
+          status: damageReports.status,
+          urgency: damageReports.urgency,
+          createdAt: damageReports.createdAt,
+        })
+        .from(damageReports)
+        .orderBy(desc(damageReports.createdAt))
+        .limit(limit),
+      this.db
+        .select({
+          id: serviceRequests.id,
+          conversationId: serviceRequests.conversationId,
+          requestType: serviceRequests.requestType,
+          reporterName: serviceRequests.reporterName,
+          description: serviceRequests.description,
+          streetAndHouseNumber: serviceRequests.streetAndHouseNumber,
+          postalCode: serviceRequests.postalCode,
+          city: serviceRequests.city,
+          preferredTimeframe: serviceRequests.preferredTimeframe,
+          status: serviceRequests.status,
+          createdAt: serviceRequests.createdAt,
+        })
+        .from(serviceRequests)
+        .orderBy(desc(serviceRequests.createdAt))
+        .limit(limit),
     ]);
 
     return [
       ...damageRows.map((row) => ({ ...row, kind: "DAMAGE" as const, preferredTimeframe: null })),
       ...serviceRows.map((row) => ({ ...row, kind: row.requestType, urgency: null })),
-    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
+    ]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
   }
 }
 
 export class DrizzleConversationRepository implements ConversationRepository {
   public constructor(private readonly db: Database) {}
 
-  public async create(input: {
-    roomName: string;
-    runtimeSnapshot: Record<string, unknown>;
-  }): Promise<{ id: string }> {
+  public async create(input: { roomName: string; runtimeSnapshot: Record<string, unknown> }): Promise<{ id: string }> {
     return this.db.transaction(async (tx) => {
       const [agent] = await tx.select().from(agents).orderBy(agents.createdAt).limit(1);
       if (!agent) throw new Error("Vera agent seed is missing");
@@ -324,10 +335,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
   public async delete(conversationId: string): Promise<boolean> {
     const deleted = await this.db
       .delete(conversations)
-      .where(and(
-        eq(conversations.id, conversationId),
-        inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"]),
-      ))
+      .where(
+        and(eq(conversations.id, conversationId), inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"])),
+      )
       .returning({ id: conversations.id });
     return deleted.length > 0;
   }
@@ -335,10 +345,12 @@ export class DrizzleConversationRepository implements ConversationRepository {
   public async deleteTerminalBefore(cutoff: Date): Promise<number> {
     const deleted = await this.db
       .delete(conversations)
-      .where(and(
-        inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"]),
-        sql`${conversations.updatedAt} < ${cutoff.toISOString()}::timestamptz`,
-      ))
+      .where(
+        and(
+          inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"]),
+          sql`${conversations.updatedAt} < ${cutoff.toISOString()}::timestamptz`,
+        ),
+      )
       .returning({ id: conversations.id });
     return deleted.length;
   }
@@ -362,9 +374,10 @@ export class DrizzleConversationRepository implements ConversationRepository {
 
   public async finish(conversationId: string, update: ConversationTerminalUpdate): Promise<void> {
     const now = new Date();
-    const writableStatuses = update.status === "COMPLETED" && update.failureCode === "SESSION_LIMIT"
-      ? ["STARTING", "ACTIVE", "COMPLETED"] as const
-      : nonTerminalStatuses;
+    const writableStatuses =
+      update.status === "COMPLETED" && update.failureCode === "SESSION_LIMIT"
+        ? (["STARTING", "ACTIVE", "COMPLETED"] as const)
+        : nonTerminalStatuses;
     await this.db
       .update(conversations)
       .set({
@@ -509,10 +522,12 @@ export class DrizzleConversationRepository implements ConversationRepository {
         durationMs: sql<number>`LEAST(2147483647, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(${conversations.startedAt}, ${conversations.createdAt}))) * 1000)))::integer`,
         updatedAt: now,
       })
-      .where(and(
-        inArray(conversations.status, ["STARTING", "ACTIVE"]),
-        sql`COALESCE(${conversations.startedAt}, ${conversations.createdAt}) < ${cutoff.toISOString()}::timestamptz`,
-      ))
+      .where(
+        and(
+          inArray(conversations.status, ["STARTING", "ACTIVE"]),
+          sql`COALESCE(${conversations.startedAt}, ${conversations.createdAt}) < ${cutoff.toISOString()}::timestamptz`,
+        ),
+      )
       .returning({ id: conversations.id });
     return rows.length;
   }

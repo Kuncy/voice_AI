@@ -31,7 +31,8 @@ export function parseSessionHandle(value: string | undefined, secret: string): S
       typeof parsed.roomName !== "string" ||
       typeof parsed.expiresAt !== "number" ||
       parsed.expiresAt <= Date.now()
-    ) return undefined;
+    )
+      return undefined;
     return parsed as SessionHandle;
   } catch {
     return undefined;

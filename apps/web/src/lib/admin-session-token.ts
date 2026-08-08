@@ -35,7 +35,8 @@ export function parseAdminSessionToken(value: string | undefined, secret: string
       !parsed.username ||
       typeof parsed.expiresAt !== "number" ||
       parsed.expiresAt <= Date.now()
-    ) return undefined;
+    )
+      return undefined;
     return parsed as AdminSession;
   } catch {
     return undefined;

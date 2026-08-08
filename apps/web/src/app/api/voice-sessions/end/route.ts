@@ -1,8 +1,8 @@
 import { getWebEnv } from "@heyvera/config";
 import { DrizzleConversationRepository } from "@heyvera/db";
-import { NextRequest, NextResponse } from "next/server";
-import { parseSessionHandle } from "@/lib/session-handle";
+import { type NextRequest, NextResponse } from "next/server";
 import { getWebDatabase } from "@/lib/database";
+import { parseSessionHandle } from "@/lib/session-handle";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
