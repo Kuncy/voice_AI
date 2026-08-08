@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { getWebEnv } from "@heyvera/config";
-import { createDatabase, DrizzleIntakeRepository } from "@heyvera/db";
+import { DrizzleIntakeRepository } from "@heyvera/db";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getWebDatabase } from "@/lib/database";
+import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +15,8 @@ const kindLabels = {
 const urgencyLabels = { LOW: "Niedrig", MEDIUM: "Mittel", HIGH: "Hoch", EMERGENCY: "Notfall" } as const;
 
 export default async function RequestsPage() {
-  const env = getWebEnv();
-  const database = createDatabase(env.DATABASE_URL, { max: 1 });
-  const rows = await new DrizzleIntakeRepository(database.db).list().finally(() => database.close());
+  await requireAdmin();
+  const rows = await new DrizzleIntakeRepository(getWebDatabase().db).list();
 
   return (
     <main className="history-shell">
@@ -23,6 +24,7 @@ export default async function RequestsPage() {
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/conversations">Conversations</Link>
         <Link className="nav-link" href="/settings">Settings</Link>
+        <LogoutButton />
         <span className="phase-badge">Intake · Übersicht</span>
       </nav>
       <section className="history-card requests-page">

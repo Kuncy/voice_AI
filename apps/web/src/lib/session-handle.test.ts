@@ -19,3 +19,9 @@ test("expired session handles are rejected", () => {
   }, secret);
   assert.equal(parseSessionHandle(handle, secret), undefined);
 });
+
+test("malformed multi-byte signatures are rejected without throwing", () => {
+  const malformed = `e30.${"ä"}${"a".repeat(42)}`;
+  assert.doesNotThrow(() => parseSessionHandle(malformed, secret));
+  assert.equal(parseSessionHandle(malformed, secret), undefined);
+});

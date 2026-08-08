@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { getWebEnv } from "@heyvera/config";
 import { readAgentSnapshotForHistory } from "@heyvera/core";
-import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
+import { DrizzleConversationRepository } from "@heyvera/db";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getWebDatabase } from "@/lib/database";
+import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +14,8 @@ function duration(value: number | null): string {
 }
 
 export default async function ConversationsPage() {
-  const env = getWebEnv();
-  const database = createDatabase(env.DATABASE_URL, { max: 1 });
-  const rows = await new DrizzleConversationRepository(database.db).list().finally(() => database.close());
+  await requireAdmin();
+  const rows = await new DrizzleConversationRepository(getWebDatabase().db).list();
 
   return (
     <main className="history-shell">
@@ -22,6 +23,7 @@ export default async function ConversationsPage() {
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/settings">Settings</Link>
         <Link className="nav-link" href="/requests">Vorgänge</Link>
+        <LogoutButton />
         <span className="phase-badge">Phase 6 · History</span>
       </nav>
       <section className="history-card">

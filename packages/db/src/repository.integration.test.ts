@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createDatabase } from "./client";
 import {
   DrizzleAgentRepository,
@@ -12,6 +12,10 @@ import {
 import { conversations, damageReports, messages, serviceRequests, toolCalls } from "./schema";
 
 const databaseUrl = process.env.DATABASE_URL;
+
+if (process.env.CI && !databaseUrl && process.env.SKIP_DATABASE_INTEGRATION_TESTS !== "1") {
+  throw new Error("DATABASE_URL is required in CI; set SKIP_DATABASE_INTEGRATION_TESTS=1 to opt out explicitly");
+}
 
 test("conversation lifecycle persists final messages idempotently and in order", { skip: !databaseUrl }, async () => {
   const database = createDatabase(databaseUrl!, { max: 2 });
@@ -220,6 +224,50 @@ test("damage report creation is transactional and idempotent by provider call id
       .from(toolCalls)
       .where(eq(toolCalls.providerCallId, "orphan-provider-call"));
     assert.equal(orphanCalls.length, 0);
+  } finally {
+    if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
+    await database.close();
+  }
+});
+
+test("failed intake writes remain auditable and terminal conversations can be deleted", { skip: !databaseUrl }, async () => {
+  const database = createDatabase(databaseUrl!, { max: 2 });
+  const conversationsRepository = new DrizzleConversationRepository(database.db);
+  const reports = new DrizzleDamageReportRepository(database.db);
+  let conversationId: string | undefined;
+  try {
+    const created = await conversationsRepository.create({
+      roomName: `failed-audit-${crypto.randomUUID()}`,
+      runtimeSnapshot: { phase: 7, test: true },
+    });
+    conversationId = created.id;
+    await assert.rejects(reports.create({
+      conversationId: created.id,
+      providerCallId: "failed-provider-call",
+      report: {
+        reporterName: "Test Person",
+        category: "not-a-category" as "heating",
+        description: "Erzwingt einen Datenbankfehler nach Beginn des Tool-Aufrufs.",
+        urgency: "low",
+        streetAndHouseNumber: "Teststraße 1",
+        postalCode: "10115",
+        city: "Berlin",
+      },
+    }));
+
+    const [failedCall] = await database.db
+      .select({ status: toolCalls.status, errorCode: toolCalls.errorCode })
+      .from(toolCalls)
+      .where(and(
+        eq(toolCalls.conversationId, created.id),
+        eq(toolCalls.providerCallId, "failed-provider-call"),
+      ));
+    assert.deepEqual(failedCall, { status: "FAILED", errorCode: "PERSISTENCE_ERROR" });
+
+    assert.equal(await conversationsRepository.delete(created.id), false);
+    await conversationsRepository.finish(created.id, { status: "FAILED", failureCode: "TEST_FAILURE" });
+    assert.equal(await conversationsRepository.delete(created.id), true);
+    conversationId = undefined;
   } finally {
     if (conversationId) await database.db.delete(conversations).where(eq(conversations.id, conversationId));
     await database.close();

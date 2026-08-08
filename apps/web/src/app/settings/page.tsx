@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { getWebEnv } from "@heyvera/config";
 import { agentSettingsSchema } from "@heyvera/core";
-import { createDatabase, DrizzleAgentRepository } from "@heyvera/db";
+import { DrizzleAgentRepository } from "@heyvera/db";
 import { SettingsForm } from "./settings-form";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getWebDatabase } from "@/lib/database";
+import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const env = getWebEnv();
-  const database = createDatabase(env.DATABASE_URL, { max: 1 });
-  const agent = await new DrizzleAgentRepository(database.db).get().finally(() => database.close());
+  await requireAdmin();
+  const agent = await new DrizzleAgentRepository(getWebDatabase().db).get();
   const settings = agentSettingsSchema.parse({
     name: agent.name,
     tone: agent.tone,
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/conversations">Conversations</Link>
         <Link className="nav-link" href="/requests">Vorgänge</Link>
+        <LogoutButton />
         <span className="phase-badge">Phase 4 · Settings</span>
       </nav>
       <section className="settings-card">

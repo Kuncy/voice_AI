@@ -21,6 +21,7 @@ import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { SessionGuardrails, type SessionEndReason } from "./session/guardrails.js";
 import { classifyProviderError, providerWarning } from "./session/provider-errors.js";
+import { captureGeneratedText } from "./session/capture-generated-text.js";
 import { createDamageReportTool } from "./tools/create-damage-report.js";
 import { createServiceRequestTool } from "./tools/create-service-request.js";
 
@@ -41,10 +42,17 @@ const endMessages: Record<SessionEndReason, string> = {
 };
 
 function createVeraAgent(snapshot: AgentSnapshotV1, tools: llm.ToolContextLike) {
-  return Agent.create({
+  const agent = Agent.create({
     instructions: dedent`${composeAgentInstructions(snapshot)}`,
     tools,
   });
+  const baseLlmNode = agent.llmNode.bind(agent);
+  agent.llmNode = async (...args: Parameters<Agent["llmNode"]>) => {
+    const stream = await baseLlmNode(...args);
+    if (!stream) return null;
+    return captureGeneratedText(stream);
+  };
+  return agent;
 }
 
 export default defineAgent({
@@ -224,12 +232,7 @@ export default defineAgent({
         isFinal: true,
         wasInterrupted: item.interrupted,
         startedAt: new Date(item.createdAt),
-        metadata: {
-          generatedText: typeof item.extra.generatedText === "string"
-            ? item.extra.generatedText
-            : content,
-          ...item.extra,
-        },
+        metadata: Object.keys(item.extra).length > 0 ? item.extra : undefined,
       }));
     });
     session.on(voice.AgentSessionEventTypes.AgentStateChanged, (event) => {

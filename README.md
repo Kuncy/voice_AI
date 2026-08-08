@@ -8,13 +8,13 @@ Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das dire
 
 Voraussetzungen: Node.js 22+, pnpm 11, Docker und ein LiveKit-Cloud-Projekt.
 
-1. `.env.example` nach `.env.local` kopieren und die Provider-Werte, `POSTGRES_PASSWORD` sowie ein mindestens 32 Zeichen langes `SESSION_SECRET` setzen.
+1. `.env.example` nach `.env.local` kopieren und die Provider-Werte, `POSTGRES_PASSWORD` sowie ein mindestens 32 Zeichen langes `SESSION_SECRET` setzen. Mit `pnpm auth:hash '<langes-admin-passwort>'` außerdem `ADMIN_PASSWORD_HASH` erzeugen.
 2. `pnpm install` ausführen.
 3. PostgreSQL und die Migration mit `./scripts/compose-local.sh up -d postgres migrate` starten.
 4. Für Prozesse auf dem Host in `.env.local` `DATABASE_URL=postgresql://heyvera:<passwort>@localhost:5433/heyvera` setzen; alternativ Web und Agent vollständig über Compose starten.
 5. Web und Agent gemeinsam mit `pnpm dev` starten.
-6. `http://localhost:3000` öffnen und den Mikrofonzugriff erlauben. Die technische Liste liegt unter `/conversations`.
-7. Unter `http://localhost:3000/settings` Vera konfigurieren. Änderungen gelten ab dem nächsten neu gestarteten Gespräch.
+6. `http://localhost:3000` öffnen und den Mikrofonzugriff erlauben. Die technische Liste liegt geschützt unter `/conversations`.
+7. Unter `http://localhost:3000/login` mit `ADMIN_USERNAME` und dem zum Hash gehörenden Passwort anmelden. Danach kann Vera unter `/settings` konfiguriert werden; Änderungen gelten ab dem nächsten neu gestarteten Gespräch.
 
 Ohne echte Credentials kann die UI deterministisch über `http://localhost:3000/?voiceTransport=fake` geprüft werden.
 
@@ -24,7 +24,7 @@ Das Repository wird als Docker-Compose-Service-Stack deployt. In Coolify:
 
 1. Git-Repository als neue Docker-Compose-Ressource auswählen.
 2. Nur dem Service `web` eine HTTPS-Domain auf Container-Port 3000 zuweisen.
-3. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SESSION_SECRET`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` und `POSTGRES_PASSWORD` als Runtime-Secrets setzen. `LIVEKIT_AGENT_NAME`, `POSTGRES_DB` und `POSTGRES_USER` sind optional.
+3. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SESSION_SECRET`, `ADMIN_PASSWORD_HASH`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` und `POSTGRES_PASSWORD` als Runtime-Secrets setzen. `ADMIN_USERNAME`, `LIVEKIT_AGENT_NAME`, `POSTGRES_DB` und `POSTGRES_USER` sind optional. `ADMIN_PASSWORD_HASH` wird mit `pnpm auth:hash '<passwort>'` erzeugt.
 4. Den Agent-Service nicht öffentlich exponieren. Sein interner LiveKit-Healthcheck läuft auf Port 8081.
 5. Das benannte Volume `postgres_data` sichern und in Coolify geplante PostgreSQL-Backups auf S3-kompatiblen Storage konfigurieren.
 6. Für Production ein eigenes LiveKit-Projekt verwenden. Preview- und lokale Worker dürfen nicht dieselben Credentials verwenden.
@@ -39,7 +39,9 @@ Die Compose-Datei verwendet Coolifys unterstützte `${VARIABLE:?}`-Syntax, Healt
 
 - `pnpm db:migrate` führt ausstehende Drizzle-Migrationen gegen `DATABASE_URL` aus.
 - `pnpm db:sweep` markiert verwaiste `STARTING`/`ACTIVE`-Conversations nach Maximaldauer plus Reconnect-Karenz als `ABANDONED`.
+- `pnpm db:prune` löscht ausschließlich terminale Conversations samt abhängigen Nachrichten, Tool-Aufrufen und Vorgängen, deren letzte Änderung länger als `DATA_RETENTION_DAYS` zurückliegt (Default: 90 Tage).
 - Für Production sollte `pnpm db:sweep` mindestens alle fünf Minuten als geplanter Coolify-Task laufen.
+- `pnpm db:prune` sollte in Production täglich als geplanter Task laufen. Einzelne Conversations können Admins zusätzlich in der Detailansicht löschen.
 - Migrationen laufen im Compose-Stack vor `web` und `agent`; beide starten erst nach erfolgreichem Abschluss.
 
 ## Phase-1-Verifikation
@@ -63,13 +65,13 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 ## Phase-3-Verifikation
 
 - `pnpm test`, `pnpm typecheck` und `pnpm build` prüfen den gesamten Workspace.
-- Der Datenbank-Integrationstest prüft Lifecycle, Reihenfolge und Idempotenz der finalen Messages sowie den `ABANDONED`-Sweeper.
-- Partielle Transkripte bleiben ausschließlich im Browser; nur finale User- und Assistant-Items gelangen in PostgreSQL.
+- Der Datenbank-Integrationstest prüft Lifecycle, Reihenfolge und Idempotenz der finalen Messages sowie den `ABANDONED`-Sweeper. In CI ist `DATABASE_URL` Pflicht; ein Lauf ohne Datenbank muss mit `SKIP_DATABASE_INTEGRATION_TESTS=1` ausdrücklich freigegeben werden.
+- Partielle Transkripte bleiben ausschließlich im Browser; nur finale User- und Assistant-Items gelangen in PostgreSQL. Fehlgeschlagene Intake-Schreibvorgänge werden nach einem Rollback bestmöglich als `FAILED`-Tool-Aufruf auditiert.
 - Der Agent fängt Persistenzfehler pro Schreibvorgang ab, protokolliert sie strukturiert und lässt die Voice-Pipeline weiterlaufen.
 
 ## Phase-4-Verifikation
 
-- `/settings` lädt und speichert Name, Tonalität und System-Prompt serverseitig in PostgreSQL; Deutsch bleibt in dieser Phase fest eingestellt.
+- `/settings` lädt und speichert Name, Tonalität und System-Prompt serverseitig in PostgreSQL; Deutsch bleibt in dieser Phase fest eingestellt. Die Seite und ihre Server-Action verlangen eine gültige Admin-Session.
 - Zod validiert Formulareingaben und gespeicherte Snapshots. Nicht überschreibbare Sprach- und Sicherheitsregeln werden dem konfigurierbaren Prompt immer vorangestellt.
 - Ein neues Gespräch speichert die zu diesem Zeitpunkt aktive Agent-Konfiguration als versionierten Snapshot. Der Agent lädt genau diesen Snapshot für den Voice-Job.
 - Der Datenbank-Integrationstest belegt, dass eine Einstellungsänderung nur neue Gespräche betrifft.
@@ -105,13 +107,21 @@ Session-Enden durch `MAX_SESSION_MS`, `IDLE_TIMEOUT_MS` oder `MAX_TURNS` werden 
 ## Phase-7-Verifikation
 
 - LiveKit übernimmt kurze Netzwerkunterbrechungen automatisch und zeigt währenddessen einen verständlichen Reconnect-Zustand.
-- Nach einem terminalen Transportabbruch fordert der Browser über `/api/voice-sessions/reconnect` einen frischen 120-Sekunden-Token für dieselbe Conversation und denselben Room an. Das signierte Session-Handle wird dabei rotiert.
+- Nach einem terminalen Transportabbruch fordert der Browser über `/api/voice-sessions/reconnect` einen frischen 120-Sekunden-Token für dieselbe Conversation und denselben Room an. Der Endpunkt verlängert das signierte Session-Handle nicht und verbindet nur, wenn Room und Agent noch aktiv sind.
 - Abgelaufene Handles oder bereits abgeschlossene Conversations werden nicht wieder verbunden; der nächste Versuch startet bewusst eine neue Session.
 - Finale Transkripte können nicht durch verspätete Partial-Updates überschrieben oder in der Live-Ansicht umsortiert werden. Unterbrochene Assistant-Nachrichten bleiben in der History markiert.
 - Barge-in bleibt adaptiv aktiv. `INTERRUPTION_MIN_DURATION_MS` und `INTERRUPTION_MIN_WORDS` erlauben kontrolliertes Tuning ohne Codeänderung.
 - Deepgram-EOT ist über `DEEPGRAM_EOT_THRESHOLD` und `DEEPGRAM_EOT_TIMEOUT_MS` konfigurierbar. Die Defaults `0.75` und `5000 ms` bleiben bis zum manuellen deutschen Voice-Smoke-Test unverändert.
 - Strukturierte Latenzlogs enthalten Conversation-, Turn- und Korrelations-ID. Providerfehler unterscheiden Rate-Limits, Timeouts und sonstige Fehler, ohne interne Details im Browser offenzulegen.
 - Deepgram-TTS verwendet weiterhin genau einen Retry pro TTS-Instanz und anschließend das konfigurierte Fallback-Modell.
+- Initialer Connect und SDK-Reconnect warten höchstens zehn Sekunden auf den Agent; eine agentlose Room endet sichtbar als Fehler statt dauerhaft als „Vera hört zu“.
+
+## Zugriffsschutz und Rate-Limits
+
+- `/conversations`, `/requests` und `/settings` werden durch eine signierte, acht Stunden gültige HTTP-only Admin-Session geschützt. Sensible Server-Actions prüfen die Session zusätzlich zum Route-Proxy.
+- Der Login akzeptiert ausschließlich den als Scrypt-Hash hinterlegten Admin-Zugang und ist gegen wiederholte Versuche begrenzt.
+- Voice-Session und Reconnect besitzen getrennte Limits. Als Client-IP wird ausschließlich `TRUSTED_CLIENT_IP_HEADER` gelesen (Default `x-real-ip`); der vorgeschaltete Ingress muss diesen Header überschreiben. Vom Browser kontrollierbare Fallback-Header werden nicht vertraut.
+- Die Limits sind bewusst pro Web-Prozess. Bei mehreren Web-Replikaten ist vor horizontaler Skalierung ein gemeinsamer TTL-Store erforderlich.
 
 Manueller Voice-Smoke-Test für Phase 7:
 
