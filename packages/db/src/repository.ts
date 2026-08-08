@@ -16,6 +16,41 @@ import { agents, conversations, damageReports, messages, serviceRequests, toolCa
 
 const nonTerminalStatuses = ["STARTING", "ACTIVE"] as const;
 
+async function recordFailedToolCall(
+  db: Database,
+  input: {
+    conversationId: string;
+    providerCallId: string;
+    toolName: "create_damage_report" | "create_service_request";
+    arguments: Record<string, unknown>;
+    startedAt: Date;
+  },
+): Promise<void> {
+  const completedAt = new Date();
+  await db
+    .insert(toolCalls)
+    .values({
+      conversationId: input.conversationId,
+      providerCallId: input.providerCallId,
+      toolName: input.toolName,
+      arguments: input.arguments,
+      status: "FAILED",
+      errorCode: "PERSISTENCE_ERROR",
+      durationMs: completedAt.getTime() - input.startedAt.getTime(),
+      completedAt,
+    })
+    .onConflictDoUpdate({
+      target: [toolCalls.conversationId, toolCalls.providerCallId],
+      set: {
+        status: "FAILED",
+        errorCode: "PERSISTENCE_ERROR",
+        durationMs: completedAt.getTime() - input.startedAt.getTime(),
+        completedAt,
+      },
+      setWhere: eq(toolCalls.status, "STARTED"),
+    });
+}
+
 export class DrizzleAgentRepository {
   public constructor(private readonly db: Database) {}
 
@@ -45,8 +80,9 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
     providerCallId: string;
     report: CreateDamageReportInput;
   }): Promise<{ damageReportId: string; status: "open" }> {
-    return this.db.transaction(async (tx) => {
-      const startedAt = new Date();
+    const startedAt = new Date();
+    try {
+      return await this.db.transaction(async (tx) => {
       const [insertedCall] = await tx
         .insert(toolCalls)
         .values({
@@ -101,8 +137,20 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
           completedAt,
         })
         .where(eq(toolCalls.id, insertedCall.id));
-      return { damageReportId: report.id, status: "open" };
-    });
+        return { damageReportId: report.id, status: "open" };
+      });
+    } catch (error) {
+      await recordFailedToolCall(this.db, {
+        conversationId: input.conversationId,
+        providerCallId: input.providerCallId,
+        toolName: "create_damage_report",
+        arguments: input.report,
+        startedAt,
+      }).catch((auditError: unknown) => {
+        console.error("failed_tool_call_audit_write_failed", { auditError });
+      });
+      throw error;
+    }
   }
 }
 
@@ -114,8 +162,9 @@ export class DrizzleServiceRequestRepository implements ServiceRequestRepository
     providerCallId: string;
     request: CreateServiceRequestInput;
   }): Promise<{ serviceRequestId: string; status: "open" }> {
-    return this.db.transaction(async (tx) => {
-      const startedAt = new Date();
+    const startedAt = new Date();
+    try {
+      return await this.db.transaction(async (tx) => {
       const [insertedCall] = await tx
         .insert(toolCalls)
         .values({
@@ -170,8 +219,20 @@ export class DrizzleServiceRequestRepository implements ServiceRequestRepository
           completedAt,
         })
         .where(eq(toolCalls.id, insertedCall.id));
-      return { serviceRequestId: request.id, status: "open" };
-    });
+        return { serviceRequestId: request.id, status: "open" };
+      });
+    } catch (error) {
+      await recordFailedToolCall(this.db, {
+        conversationId: input.conversationId,
+        providerCallId: input.providerCallId,
+        toolName: "create_service_request",
+        arguments: input.request,
+        startedAt,
+      }).catch((auditError: unknown) => {
+        console.error("failed_tool_call_audit_write_failed", { auditError });
+      });
+      throw error;
+    }
   }
 }
 
@@ -258,6 +319,28 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .where(eq(conversations.id, conversationId))
       .limit(1);
     return row?.agentSnapshot;
+  }
+
+  public async delete(conversationId: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(conversations)
+      .where(and(
+        eq(conversations.id, conversationId),
+        inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"]),
+      ))
+      .returning({ id: conversations.id });
+    return deleted.length > 0;
+  }
+
+  public async deleteTerminalBefore(cutoff: Date): Promise<number> {
+    const deleted = await this.db
+      .delete(conversations)
+      .where(and(
+        inArray(conversations.status, ["COMPLETED", "FAILED", "ABANDONED"]),
+        sql`${conversations.updatedAt} < ${cutoff.toISOString()}::timestamptz`,
+      ))
+      .returning({ id: conversations.id });
+    return deleted.length;
   }
 
   public async getReconnectTarget(conversationId: string): Promise<{ roomName: string } | undefined> {

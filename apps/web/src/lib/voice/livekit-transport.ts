@@ -25,6 +25,7 @@ import {
   sessionNoticeTopic,
   toolStatusTopic,
 } from "./session-events";
+import { findAgent, waitForAgent } from "./agent-presence";
 
 type SessionResponse = { token: string; livekitUrl: string; roomName: string };
 
@@ -75,8 +76,8 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       await room.connect(session.livekitUrl, session.token);
       await room.localParticipant.setMicrophoneEnabled(true);
       this.reconnectAvailable = false;
-      const agent = [...room.remoteParticipants.values()].find((participant) => participant.isAgent);
-      if (!agent || !this.syncAgentState(agent)) this.setState("listening");
+      const agent = await waitForAgent(room);
+      if (!this.syncAgentState(agent)) this.setState("listening");
     } catch (error) {
       await this.room?.disconnect().catch(() => undefined);
       this.room = undefined;
@@ -212,9 +213,25 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       .on(RoomEvent.Reconnected, () => {
         if (this.agentRequestedEnd) return;
         this.reconnectAvailable = false;
-        const agent = [...room.remoteParticipants.values()].find((participant) => participant.isAgent);
-        if (!agent || !this.syncAgentState(agent)) this.setState("listening");
-        this.emitNotice({ type: "provider_warning", message: "Die Verbindung wurde wiederhergestellt." });
+        const agent = findAgent(room);
+        if (agent) {
+          if (!this.syncAgentState(agent)) this.setState("listening");
+          this.emitNotice({ type: "provider_warning", message: "Die Verbindung wurde wiederhergestellt." });
+          return;
+        }
+        void waitForAgent(room).then((joinedAgent) => {
+          if (this.room !== room || this.agentRequestedEnd) return;
+          if (!this.syncAgentState(joinedAgent)) this.setState("listening");
+          this.emitNotice({ type: "provider_warning", message: "Die Verbindung wurde wiederhergestellt." });
+        }).catch(() => {
+          if (this.room !== room || this.agentRequestedEnd) return;
+          this.emitNotice({ type: "provider_warning", message: "Vera konnte nicht wieder verbunden werden." });
+          this.reconnectAvailable = false;
+          this.room = undefined;
+          this.audioRoot.replaceChildren();
+          this.setState("error");
+          void room.disconnect();
+        });
       })
       .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (this.room !== room) return;

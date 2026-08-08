@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getWebEnv } from "@heyvera/config";
 import { readAgentSnapshotForHistory } from "@heyvera/core";
-import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
+import { DrizzleConversationRepository } from "@heyvera/db";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getWebDatabase } from "@/lib/database";
+import { DeleteConversationButton } from "./delete-conversation-button";
+import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +46,11 @@ function json(value: unknown): string {
 }
 
 export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin();
   const { id } = await params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) notFound();
 
-  const env = getWebEnv();
-  const database = createDatabase(env.DATABASE_URL, { max: 2 });
-  const detail = await new DrizzleConversationRepository(database.db).getDetail(id).finally(() => database.close());
+  const detail = await new DrizzleConversationRepository(getWebDatabase().db).getDetail(id);
   if (!detail) notFound();
 
   const { conversation, messages, toolCalls } = detail;
@@ -62,6 +64,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
         <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
         <Link className="nav-link" href="/settings">Settings</Link>
         <Link className="nav-link" href="/requests">Vorgänge</Link>
+        <LogoutButton />
         <span className="phase-badge">Phase 6 · Detail</span>
       </nav>
 
@@ -176,6 +179,12 @@ export default async function ConversationDetailPage({ params }: { params: Promi
             </div>
           )}
         </section>
+        {!["STARTING", "ACTIVE"].includes(conversation.status) && (
+          <section className="detail-section danger-zone">
+            <div><h2>Daten löschen</h2><p>Entfernt diese Conversation und alle zugehörigen Nachrichten, Tool-Aufrufe und Vorgänge.</p></div>
+            <DeleteConversationButton conversationId={conversation.id} />
+          </section>
+        )}
       </section>
     </main>
   );

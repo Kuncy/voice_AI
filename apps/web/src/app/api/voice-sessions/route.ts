@@ -1,38 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { RoomAgentDispatch, RoomConfiguration, TrackSource } from "@livekit/protocol";
-import { getWebEnv } from "@heyvera/config";
-import { createDatabase, DrizzleConversationRepository } from "@heyvera/db";
+import { getRuntimeConfig, getWebEnv } from "@heyvera/config";
+import { DrizzleConversationRepository } from "@heyvera/db";
 import { AccessToken } from "livekit-server-sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { createSessionHandle } from "@/lib/session-handle";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { getWebDatabase } from "@/lib/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type RateBucket = { count: number; resetsAt: number };
-const minuteBuckets = new Map<string, RateBucket>();
-const hourBuckets = new Map<string, RateBucket>();
-
-function clientAddress(request: NextRequest): string {
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-real-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
-}
-
-function consume(buckets: Map<string, RateBucket>, key: string, limit: number, windowMs: number): boolean {
-  const now = Date.now();
-  const current = buckets.get(key);
-  if (!current || current.resetsAt <= now) {
-    buckets.set(key, { count: 1, resetsAt: now + windowMs });
-    return true;
-  }
-  if (current.count >= limit) return false;
-  current.count += 1;
-  return true;
-}
 
 export async function POST(request: NextRequest) {
   if (request.headers.get("content-length") && request.headers.get("content-length") !== "0") {
@@ -41,39 +18,38 @@ export async function POST(request: NextRequest) {
 
   const address = clientAddress(request);
   if (
-    !consume(minuteBuckets, `minute:${address}`, 5, 60_000) ||
-    !consume(hourBuckets, `hour:${address}`, 30, 60 * 60_000)
+    !consumeRateLimit("voice-session-minute", address, 5, 60_000) ||
+    !consumeRateLimit("voice-session-hour", address, 30, 60 * 60_000)
   ) {
     return NextResponse.json({ error: "Zu viele Sitzungen. Bitte versuche es später erneut." }, { status: 429 });
   }
 
-  let database: ReturnType<typeof createDatabase> | undefined;
   let repository: DrizzleConversationRepository | undefined;
   let conversationId: string | undefined;
   try {
     const env = getWebEnv();
-    database = createDatabase(env.DATABASE_URL, { max: 1 });
-    repository = new DrizzleConversationRepository(database.db);
+    const runtime = getRuntimeConfig();
+    repository = new DrizzleConversationRepository(getWebDatabase().db);
     const roomName = `vera-${randomUUID()}`;
     const conversation = await repository.create({
       roomName,
       runtimeSnapshot: {
         stt: "deepgram",
-        sttModel: process.env.DEEPGRAM_STT_MODEL ?? "flux-general-multi",
-        eotThreshold: Number(process.env.DEEPGRAM_EOT_THRESHOLD ?? 0.75),
-        eotTimeoutMs: Number(process.env.DEEPGRAM_EOT_TIMEOUT_MS ?? 5_000),
+        sttModel: runtime.DEEPGRAM_STT_MODEL,
+        eotThreshold: runtime.DEEPGRAM_EOT_THRESHOLD,
+        eotTimeoutMs: runtime.DEEPGRAM_EOT_TIMEOUT_MS,
         llm: "openai",
-        llmModel: process.env.OPENAI_MODEL ?? "gpt-4.1",
+        llmModel: runtime.OPENAI_MODEL,
         tts: "deepgram",
-        ttsModel: process.env.DEEPGRAM_TTS_MODEL ?? "aura-2-viktoria-de",
-        ttsFallbackModel: process.env.DEEPGRAM_TTS_FALLBACK_MODEL ?? "aura-2-elara-de",
+        ttsModel: runtime.DEEPGRAM_TTS_MODEL,
+        ttsFallbackModel: runtime.DEEPGRAM_TTS_FALLBACK_MODEL,
         livekitAgentName: env.LIVEKIT_AGENT_NAME,
-        maxSessionMs: Number(process.env.MAX_SESSION_MS ?? 600_000),
-        idleTimeoutMs: Number(process.env.IDLE_TIMEOUT_MS ?? 60_000),
-        maxTurns: Number(process.env.MAX_TURNS ?? 40),
-        reconnectGraceMs: Number(process.env.RECONNECT_GRACE_MS ?? 60_000),
-        interruptionMinDurationMs: Number(process.env.INTERRUPTION_MIN_DURATION_MS ?? 400),
-        interruptionMinWords: Number(process.env.INTERRUPTION_MIN_WORDS ?? 1),
+        maxSessionMs: runtime.MAX_SESSION_MS,
+        idleTimeoutMs: runtime.IDLE_TIMEOUT_MS,
+        maxTurns: runtime.MAX_TURNS,
+        reconnectGraceMs: runtime.RECONNECT_GRACE_MS,
+        interruptionMinDurationMs: runtime.INTERRUPTION_MIN_DURATION_MS,
+        interruptionMinWords: runtime.INTERRUPTION_MIN_WORDS,
         phase: 7,
       },
     });
@@ -126,7 +102,5 @@ export async function POST(request: NextRequest) {
     }
     console.error("voice_session_create_failed", { error });
     return NextResponse.json({ error: "Die Voice-Session konnte nicht gestartet werden." }, { status: 503 });
-  } finally {
-    await database?.close();
   }
 }

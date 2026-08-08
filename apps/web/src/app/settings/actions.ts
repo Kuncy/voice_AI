@@ -1,9 +1,10 @@
 "use server";
 
 import { agentSettingsSchema } from "@heyvera/core";
-import { createDatabase, DrizzleAgentRepository } from "@heyvera/db";
-import { getWebEnv } from "@heyvera/config";
+import { DrizzleAgentRepository } from "@heyvera/db";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/admin-auth";
+import { getWebDatabase } from "@/lib/database";
 
 export type SettingsActionState = {
   status: "idle" | "success" | "error";
@@ -15,6 +16,7 @@ export async function updateAgentSettings(
   _previous: SettingsActionState,
   formData: FormData,
 ): Promise<SettingsActionState> {
+  await requireAdmin();
   const parsed = agentSettingsSchema.safeParse({
     name: formData.get("name"),
     tone: formData.get("tone"),
@@ -28,17 +30,12 @@ export async function updateAgentSettings(
     };
   }
 
-  let database: ReturnType<typeof createDatabase> | undefined;
   try {
-    const env = getWebEnv();
-    database = createDatabase(env.DATABASE_URL, { max: 1 });
-    await new DrizzleAgentRepository(database.db).update(parsed.data);
+    await new DrizzleAgentRepository(getWebDatabase().db).update(parsed.data);
     revalidatePath("/settings");
     return { status: "success", message: "Vera wurde gespeichert. Neue Gespräche verwenden diese Einstellungen." };
   } catch (error) {
     console.error("agent_settings_update_failed", { error });
     return { status: "error", message: "Die Einstellungen konnten nicht gespeichert werden." };
-  } finally {
-    await database?.close();
   }
 }
