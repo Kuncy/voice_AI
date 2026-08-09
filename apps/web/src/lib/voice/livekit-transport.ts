@@ -23,6 +23,8 @@ import type {
   ToolStatusEvent,
   TranscriptEvent,
   Unsubscribe,
+  VoiceAudioTracks,
+  VoiceSessionInfo,
   VoiceState,
   VoiceTransport,
 } from "./transport";
@@ -36,8 +38,13 @@ export class LiveKitVoiceTransport implements VoiceTransport {
   private readonly transcriptListeners = new Set<(event: TranscriptEvent) => void>();
   private readonly noticeListeners = new Set<(event: SessionNotice) => void>();
   private readonly toolListeners = new Set<(event: ToolStatusEvent) => void>();
+  private readonly audioTrackListeners = new Set<(tracks: VoiceAudioTracks) => void>();
+  private readonly sessionInfoListeners = new Set<(info: VoiceSessionInfo | null) => void>();
   private agentRequestedEnd = false;
   private reconnectAvailable = false;
+  private microphoneMuted = true;
+  private audioTracks: VoiceAudioTracks = { input: null, output: null };
+  private sessionInfo: VoiceSessionInfo | null = null;
 
   public constructor(private readonly audioRoot: HTMLElement) {}
 
@@ -47,6 +54,10 @@ export class LiveKitVoiceTransport implements VoiceTransport {
 
   public get canReconnect(): boolean {
     return this.reconnectAvailable;
+  }
+
+  public get isMicrophoneMuted(): boolean {
+    return this.microphoneMuted;
   }
 
   public async connect(): Promise<void> {
@@ -74,6 +85,14 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       await room.startAudio();
       await room.connect(session.livekitUrl, session.token);
       await room.localParticipant.setMicrophoneEnabled(true);
+      this.microphoneMuted = false;
+      this.audioTracks = {
+        ...this.audioTracks,
+        input: room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null,
+      };
+      this.emitAudioTracks();
+      this.sessionInfo = { roomName: session.roomName, connectedAt: Date.now() };
+      this.emitSessionInfo();
       this.reconnectAvailable = false;
       const agent = await waitForAgent(room);
       if (!this.syncAgentState(agent)) this.setState("listening");
@@ -81,6 +100,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
       await this.room?.disconnect().catch(() => undefined);
       this.room = undefined;
       this.audioRoot.replaceChildren();
+      this.resetSessionUi();
       this.setState("error");
       throw error;
     }
@@ -99,7 +119,33 @@ export class LiveKitVoiceTransport implements VoiceTransport {
     await this.room.disconnect();
     this.room = undefined;
     this.audioRoot.replaceChildren();
+    this.resetSessionUi();
     this.setState("idle");
+  }
+
+  public async setMicrophoneMuted(muted: boolean): Promise<void> {
+    if (!this.room) return;
+    await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    this.microphoneMuted = muted;
+    this.audioTracks = {
+      ...this.audioTracks,
+      input: muted
+        ? null
+        : (this.room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack ?? null),
+    };
+    this.emitAudioTracks();
+  }
+
+  public onAudioTracks(callback: (tracks: VoiceAudioTracks) => void): Unsubscribe {
+    this.audioTrackListeners.add(callback);
+    callback(this.audioTracks);
+    return () => this.audioTrackListeners.delete(callback);
+  }
+
+  public onSessionInfo(callback: (info: VoiceSessionInfo | null) => void): Unsubscribe {
+    this.sessionInfoListeners.add(callback);
+    callback(this.sessionInfo);
+    return () => this.sessionInfoListeners.delete(callback);
   }
 
   public onTranscript(callback: (event: TranscriptEvent) => void): Unsubscribe {
@@ -132,10 +178,16 @@ export class LiveKitVoiceTransport implements VoiceTransport {
           const element = track.attach();
           element.autoplay = true;
           this.audioRoot.append(element);
+          this.audioTracks = { ...this.audioTracks, output: track.mediaStreamTrack };
+          this.emitAudioTracks();
         },
       )
       .on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
         for (const element of track.detach()) element.remove();
+        if (track.kind === Track.Kind.Audio) {
+          this.audioTracks = { ...this.audioTracks, output: null };
+          this.emitAudioTracks();
+        }
       })
       .on(RoomEvent.TranscriptionReceived, (segments: TranscriptionSegment[], participant?: Participant) => {
         const speaker = participant?.isAgent ? "assistant" : "user";
@@ -162,6 +214,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         if (this.agentRequestedEnd) {
           this.room = undefined;
           this.audioRoot.replaceChildren();
+          this.resetSessionUi();
           this.setState("idle");
           return;
         }
@@ -172,6 +225,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         this.reconnectAvailable = false;
         this.room = undefined;
         this.audioRoot.replaceChildren();
+        this.resetSessionUi();
         this.setState("error");
         void room.disconnect();
       })
@@ -227,6 +281,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
             this.reconnectAvailable = false;
             this.room = undefined;
             this.audioRoot.replaceChildren();
+            this.resetSessionUi();
             this.setState("error");
             void room.disconnect();
           });
@@ -236,6 +291,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         this.audioRoot.replaceChildren();
         if (this.agentRequestedEnd) {
           this.room = undefined;
+          this.resetSessionUi();
           this.setState("idle");
           return;
         }
@@ -246,6 +302,7 @@ export class LiveKitVoiceTransport implements VoiceTransport {
         ) {
           this.room = undefined;
           this.reconnectAvailable = true;
+          this.resetSessionUi();
           this.emitNotice({
             type: "provider_warning",
             message: "Die Verbindung wurde getrennt. Du kannst dasselbe Gespräch wiederherstellen.",
@@ -264,6 +321,22 @@ export class LiveKitVoiceTransport implements VoiceTransport {
 
   private emitNotice(notice: SessionNotice): void {
     for (const listener of this.noticeListeners) listener(notice);
+  }
+
+  private emitAudioTracks(): void {
+    for (const listener of this.audioTrackListeners) listener(this.audioTracks);
+  }
+
+  private emitSessionInfo(): void {
+    for (const listener of this.sessionInfoListeners) listener(this.sessionInfo);
+  }
+
+  private resetSessionUi(): void {
+    this.microphoneMuted = true;
+    this.audioTracks = { input: null, output: null };
+    this.sessionInfo = null;
+    this.emitAudioTracks();
+    this.emitSessionInfo();
   }
 
   private setState(state: VoiceState): void {
