@@ -240,12 +240,13 @@ test("damage report creation is transactional and idempotent by provider call id
   }
 });
 
-test("failed intake writes remain auditable and terminal conversations can be deleted", {
+test("failed intake writes remain auditable for every intake type and terminal conversations can be deleted", {
   skip: !databaseUrl,
 }, async () => {
   const database = createDatabase(requireDatabaseUrl(), { max: 2 });
   const conversationsRepository = new DrizzleConversationRepository(database.db);
   const reports = new DrizzleDamageReportRepository(database.db);
+  const requests = new DrizzleServiceRequestRepository(database.db);
   let conversationId: string | undefined;
   try {
     const created = await conversationsRepository.create({
@@ -274,6 +275,29 @@ test("failed intake writes remain auditable and terminal conversations can be de
       .from(toolCalls)
       .where(and(eq(toolCalls.conversationId, created.id), eq(toolCalls.providerCallId, "failed-provider-call")));
     assert.deepEqual(failedCall, { status: "FAILED", errorCode: "PERSISTENCE_ERROR" });
+
+    await assert.rejects(
+      requests.create({
+        conversationId: created.id,
+        providerCallId: "failed-service-provider-call",
+        request: {
+          requestType: "not-a-request-type" as "appointment",
+          reporterName: "Test Person",
+          description: "Erzwingt auch für Service-Anfragen einen Datenbankfehler.",
+          streetAndHouseNumber: "Teststraße 1",
+          postalCode: "10115",
+          city: "Berlin",
+          preferredTimeframe: "Morgen",
+        },
+      }),
+    );
+    const [failedServiceCall] = await database.db
+      .select({ status: toolCalls.status, errorCode: toolCalls.errorCode })
+      .from(toolCalls)
+      .where(
+        and(eq(toolCalls.conversationId, created.id), eq(toolCalls.providerCallId, "failed-service-provider-call")),
+      );
+    assert.deepEqual(failedServiceCall, { status: "FAILED", errorCode: "PERSISTENCE_ERROR" });
 
     assert.equal(await conversationsRepository.delete(created.id), false);
     await conversationsRepository.finish(created.id, { status: "FAILED", failureCode: "TEST_FAILURE" });

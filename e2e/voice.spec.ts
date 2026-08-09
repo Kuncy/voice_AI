@@ -30,3 +30,23 @@ test("shows a useful error when the fake connection fails", async ({ page }) => 
   await expect(page.getByText("Verbindung fehlgeschlagen", { exact: true })).toBeVisible();
   await expect(page.getByText("Die Testverbindung konnte nicht aufgebaut werden.", { exact: true })).toBeVisible();
 });
+
+test("dismisses notices after six seconds and restarts the timeout for a new notice", async ({ page }) => {
+  await login(page);
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+
+  await page.goto("/?voiceTransport=fake&fakeScenario=notice");
+  await page.getByRole("button", { name: "Gespräch starten" }).click();
+  await expect(page.getByText("Erster Testhinweis", { exact: true })).toBeVisible();
+
+  await page.clock.fastForward(3_999);
+  await expect(page.getByText("Erster Testhinweis", { exact: true })).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(page.getByText("Zweiter Testhinweis", { exact: true })).toBeVisible();
+
+  await page.clock.fastForward(5_999);
+  await expect(page.getByText("Zweiter Testhinweis", { exact: true })).toBeVisible();
+  await page.clock.fastForward(1);
+  await expect(page.getByText("Zweiter Testhinweis", { exact: true })).toBeHidden();
+});

@@ -15,6 +15,12 @@ import type { Database } from "./client";
 import { agents, conversations, damageReports, messages, serviceRequests, toolCalls } from "./schema";
 
 const nonTerminalStatuses = ["STARTING", "ACTIVE"] as const;
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type IntakeToolName = "create_damage_report" | "create_service_request";
+
+function conversationDurationMsSql() {
+  return sql<number>`LEAST(2147483647, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(${conversations.startedAt}, ${conversations.createdAt}))) * 1000)))::integer`;
+}
 
 async function recordFailedToolCall(
   db: Database,
@@ -51,6 +57,60 @@ async function recordFailedToolCall(
     });
 }
 
+async function createIntakeRecord<TArguments extends Record<string, unknown>, TResult extends Record<string, unknown>>(
+  db: Database,
+  input: {
+    conversationId: string;
+    providerCallId: string;
+    toolName: IntakeToolName;
+    arguments: TArguments;
+    existingResult: (tx: Transaction) => Promise<TResult>;
+    createResult: (tx: Transaction, toolCallId: string) => Promise<TResult>;
+  },
+): Promise<TResult> {
+  const startedAt = new Date();
+  try {
+    return await db.transaction(async (tx) => {
+      const [insertedCall] = await tx
+        .insert(toolCalls)
+        .values({
+          conversationId: input.conversationId,
+          providerCallId: input.providerCallId,
+          toolName: input.toolName,
+          arguments: input.arguments,
+        })
+        .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
+        .returning({ id: toolCalls.id });
+
+      if (!insertedCall) return input.existingResult(tx);
+
+      const result = await input.createResult(tx, insertedCall.id);
+      const completedAt = new Date();
+      await tx
+        .update(toolCalls)
+        .set({
+          result: { ok: true, ...result },
+          status: "SUCCEEDED",
+          durationMs: completedAt.getTime() - startedAt.getTime(),
+          completedAt,
+        })
+        .where(eq(toolCalls.id, insertedCall.id));
+      return result;
+    });
+  } catch (error) {
+    await recordFailedToolCall(db, {
+      conversationId: input.conversationId,
+      providerCallId: input.providerCallId,
+      toolName: input.toolName,
+      arguments: input.arguments,
+      startedAt,
+    }).catch((auditError: unknown) => {
+      console.error("failed_tool_call_audit_write_failed", { auditError });
+    });
+    throw error;
+  }
+}
+
 export class DrizzleAgentRepository {
   public constructor(private readonly db: Database) {}
 
@@ -80,43 +140,31 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
     providerCallId: string;
     report: CreateDamageReportInput;
   }): Promise<{ damageReportId: string; status: "open" }> {
-    const startedAt = new Date();
-    try {
-      return await this.db.transaction(async (tx) => {
-        const [insertedCall] = await tx
-          .insert(toolCalls)
-          .values({
-            conversationId: input.conversationId,
-            providerCallId: input.providerCallId,
-            toolName: "create_damage_report",
-            arguments: input.report,
-          })
-          .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
-          .returning({ id: toolCalls.id });
-
-        if (!insertedCall) {
-          const [existing] = await tx
-            .select({ damageReportId: damageReports.id, status: damageReports.status })
-            .from(toolCalls)
-            .innerJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
-            .where(
-              and(
-                eq(toolCalls.conversationId, input.conversationId),
-                eq(toolCalls.providerCallId, input.providerCallId),
-              ),
-            )
-            .limit(1);
-          if (existing?.status !== "OPEN") {
-            throw new Error("Existing damage report tool call has no open report");
-          }
-          return { damageReportId: existing.damageReportId, status: "open" };
+    return createIntakeRecord(this.db, {
+      conversationId: input.conversationId,
+      providerCallId: input.providerCallId,
+      toolName: "create_damage_report",
+      arguments: input.report,
+      existingResult: async (tx) => {
+        const [existing] = await tx
+          .select({ damageReportId: damageReports.id, status: damageReports.status })
+          .from(toolCalls)
+          .innerJoin(damageReports, eq(damageReports.toolCallId, toolCalls.id))
+          .where(
+            and(eq(toolCalls.conversationId, input.conversationId), eq(toolCalls.providerCallId, input.providerCallId)),
+          )
+          .limit(1);
+        if (existing?.status !== "OPEN") {
+          throw new Error("Existing damage report tool call has no open report");
         }
-
+        return { damageReportId: existing.damageReportId, status: "open" as const };
+      },
+      createResult: async (tx, toolCallId) => {
         const [report] = await tx
           .insert(damageReports)
           .values({
             conversationId: input.conversationId,
-            toolCallId: insertedCall.id,
+            toolCallId,
             reporterName: input.report.reporterName,
             category: input.report.category.toUpperCase() as Uppercase<CreateDamageReportInput["category"]>,
             description: input.report.description,
@@ -127,32 +175,9 @@ export class DrizzleDamageReportRepository implements DamageReportRepository {
           })
           .returning({ id: damageReports.id });
         if (!report) throw new Error("Damage report insert returned no row");
-
-        const result = { ok: true, damageReportId: report.id, status: "open" as const };
-        const completedAt = new Date();
-        await tx
-          .update(toolCalls)
-          .set({
-            result,
-            status: "SUCCEEDED",
-            durationMs: completedAt.getTime() - startedAt.getTime(),
-            completedAt,
-          })
-          .where(eq(toolCalls.id, insertedCall.id));
         return { damageReportId: report.id, status: "open" };
-      });
-    } catch (error) {
-      await recordFailedToolCall(this.db, {
-        conversationId: input.conversationId,
-        providerCallId: input.providerCallId,
-        toolName: "create_damage_report",
-        arguments: input.report,
-        startedAt,
-      }).catch((auditError: unknown) => {
-        console.error("failed_tool_call_audit_write_failed", { auditError });
-      });
-      throw error;
-    }
+      },
+    });
   }
 }
 
@@ -164,43 +189,31 @@ export class DrizzleServiceRequestRepository implements ServiceRequestRepository
     providerCallId: string;
     request: CreateServiceRequestInput;
   }): Promise<{ serviceRequestId: string; status: "open" }> {
-    const startedAt = new Date();
-    try {
-      return await this.db.transaction(async (tx) => {
-        const [insertedCall] = await tx
-          .insert(toolCalls)
-          .values({
-            conversationId: input.conversationId,
-            providerCallId: input.providerCallId,
-            toolName: "create_service_request",
-            arguments: input.request,
-          })
-          .onConflictDoNothing({ target: [toolCalls.conversationId, toolCalls.providerCallId] })
-          .returning({ id: toolCalls.id });
-
-        if (!insertedCall) {
-          const [existing] = await tx
-            .select({ serviceRequestId: serviceRequests.id, status: serviceRequests.status })
-            .from(toolCalls)
-            .innerJoin(serviceRequests, eq(serviceRequests.toolCallId, toolCalls.id))
-            .where(
-              and(
-                eq(toolCalls.conversationId, input.conversationId),
-                eq(toolCalls.providerCallId, input.providerCallId),
-              ),
-            )
-            .limit(1);
-          if (existing?.status !== "OPEN") {
-            throw new Error("Existing service request tool call has no open request");
-          }
-          return { serviceRequestId: existing.serviceRequestId, status: "open" };
+    return createIntakeRecord(this.db, {
+      conversationId: input.conversationId,
+      providerCallId: input.providerCallId,
+      toolName: "create_service_request",
+      arguments: input.request,
+      existingResult: async (tx) => {
+        const [existing] = await tx
+          .select({ serviceRequestId: serviceRequests.id, status: serviceRequests.status })
+          .from(toolCalls)
+          .innerJoin(serviceRequests, eq(serviceRequests.toolCallId, toolCalls.id))
+          .where(
+            and(eq(toolCalls.conversationId, input.conversationId), eq(toolCalls.providerCallId, input.providerCallId)),
+          )
+          .limit(1);
+        if (existing?.status !== "OPEN") {
+          throw new Error("Existing service request tool call has no open request");
         }
-
+        return { serviceRequestId: existing.serviceRequestId, status: "open" as const };
+      },
+      createResult: async (tx, toolCallId) => {
         const [request] = await tx
           .insert(serviceRequests)
           .values({
             conversationId: input.conversationId,
-            toolCallId: insertedCall.id,
+            toolCallId,
             requestType: input.request.requestType.toUpperCase() as Uppercase<CreateServiceRequestInput["requestType"]>,
             reporterName: input.request.reporterName,
             description: input.request.description,
@@ -211,32 +224,9 @@ export class DrizzleServiceRequestRepository implements ServiceRequestRepository
           })
           .returning({ id: serviceRequests.id });
         if (!request) throw new Error("Service request insert returned no row");
-
-        const result = { ok: true, serviceRequestId: request.id, status: "open" as const };
-        const completedAt = new Date();
-        await tx
-          .update(toolCalls)
-          .set({
-            result,
-            status: "SUCCEEDED",
-            durationMs: completedAt.getTime() - startedAt.getTime(),
-            completedAt,
-          })
-          .where(eq(toolCalls.id, insertedCall.id));
         return { serviceRequestId: request.id, status: "open" };
-      });
-    } catch (error) {
-      await recordFailedToolCall(this.db, {
-        conversationId: input.conversationId,
-        providerCallId: input.providerCallId,
-        toolName: "create_service_request",
-        arguments: input.request,
-        startedAt,
-      }).catch((auditError: unknown) => {
-        console.error("failed_tool_call_audit_write_failed", { auditError });
-      });
-      throw error;
-    }
+      },
+    });
   }
 }
 
@@ -393,7 +383,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         status: update.status,
         failureCode: update.failureCode ?? null,
         endedAt: now,
-        durationMs: sql<number>`LEAST(2147483647, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(${conversations.startedAt}, ${conversations.createdAt}))) * 1000)))::integer`,
+        durationMs: conversationDurationMsSql(),
         updatedAt: now,
       })
       .where(and(eq(conversations.id, conversationId), inArray(conversations.status, [...writableStatuses])));
@@ -528,7 +518,7 @@ export class DrizzleConversationRepository implements ConversationRepository {
         status: "ABANDONED",
         failureCode: "STALE_SESSION",
         endedAt: now,
-        durationMs: sql<number>`LEAST(2147483647, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(${conversations.startedAt}, ${conversations.createdAt}))) * 1000)))::integer`,
+        durationMs: conversationDurationMsSql(),
         updatedAt: now,
       })
       .where(

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FakeVoiceTransport } from "@/lib/voice/fake-transport";
 import { LiveKitVoiceTransport } from "@/lib/voice/livekit-transport";
 import { reconcileTranscript } from "@/lib/voice/transcript-reducer";
@@ -44,11 +44,27 @@ function toolStatusLabel(event: ToolStatusEvent): string {
 export function VoiceScreen() {
   const audioRoot = useRef<HTMLDivElement>(null);
   const transport = useRef<VoiceTransport>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [state, setState] = useState<VoiceState>("idle");
   const [transcripts, setTranscripts] = useState<TranscriptEvent[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [toolStatus, setToolStatus] = useState<ToolStatusEvent>();
+
+  const clearNotice = useCallback(() => {
+    if (noticeTimer.current !== undefined) clearTimeout(noticeTimer.current);
+    noticeTimer.current = undefined;
+    setNotice(undefined);
+  }, []);
+
+  const showNotice = useCallback((message: string) => {
+    if (noticeTimer.current !== undefined) clearTimeout(noticeTimer.current);
+    setNotice(message);
+    noticeTimer.current = setTimeout(() => {
+      noticeTimer.current = undefined;
+      setNotice(undefined);
+    }, 6_000);
+  }, []);
 
   useEffect(() => {
     if (!audioRoot.current) return;
@@ -57,7 +73,9 @@ export function VoiceScreen() {
       new URLSearchParams(window.location.search).get("voiceTransport") === "fake";
     const fakeScenario = new URLSearchParams(window.location.search).get("fakeScenario");
     const instance = useFake
-      ? new FakeVoiceTransport(fakeScenario === "connection-error" ? "connection-error" : "default")
+      ? new FakeVoiceTransport(
+          fakeScenario === "connection-error" || fakeScenario === "notice" ? fakeScenario : "default",
+        )
       : new LiveKitVoiceTransport(audioRoot.current);
     transport.current = instance;
     const unsubscribeState = instance.onStateChange(setState);
@@ -65,7 +83,7 @@ export function VoiceScreen() {
       setTranscripts((current) => reconcileTranscript(current, event));
     });
     const unsubscribeNotice = instance.onNotice((event) => {
-      setNotice(event.message);
+      showNotice(event.message);
     });
     const unsubscribeToolStatus = instance.onToolStatus(setToolStatus);
     return () => {
@@ -73,14 +91,15 @@ export function VoiceScreen() {
       unsubscribeTranscript();
       unsubscribeNotice();
       unsubscribeToolStatus();
+      if (noticeTimer.current !== undefined) clearTimeout(noticeTimer.current);
       void instance.disconnect();
       transport.current = null;
     };
-  }, []);
+  }, [showNotice]);
 
   async function toggleCall() {
     setError(undefined);
-    setNotice(undefined);
+    clearNotice();
     setToolStatus(undefined);
     try {
       if (state === "idle" || state === "error") {
