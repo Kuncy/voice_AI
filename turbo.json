@@ -45,6 +45,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "SKIP_DATABASE_INTEGRATION_TESTS"],
       "outputs": []
     },
     "typecheck": {
