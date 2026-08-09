@@ -31,7 +31,7 @@ export default async function SettingsPage() {
           Vorgänge
         </Link>
         <LogoutButton />
-        <span className="phase-badge">Phase 4 · Settings</span>
+        <span className="phase-badge">Agent · Settings</span>
       </nav>
       <section className="settings-card">
         <p className="eyebrow">AGENT-KONFIGURATION</p>

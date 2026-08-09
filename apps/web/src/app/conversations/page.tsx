@@ -31,7 +31,7 @@ export default async function ConversationsPage() {
           Vorgänge
         </Link>
         <LogoutButton />
-        <span className="phase-badge">Phase 6 · History</span>
+        <span className="phase-badge">Conversations · Übersicht</span>
       </nav>
       <section className="history-card">
         <p className="eyebrow">TECHNISCHE VERIFIKATION</p>

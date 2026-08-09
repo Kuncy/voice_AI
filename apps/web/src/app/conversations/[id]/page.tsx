@@ -189,7 +189,7 @@ export default async function ConversationDetailPage({ params }: { params: Promi
           Vorgänge
         </Link>
         <LogoutButton />
-        <span className="phase-badge">Phase 6 · Detail</span>
+        <span className="phase-badge">Conversations · Detail</span>
       </nav>
 
       <section className="history-card detail-page">
