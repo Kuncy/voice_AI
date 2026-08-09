@@ -1,18 +1,13 @@
 import { getAdminEnv } from "@heyvera/config";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { safeAdminRedirect } from "@/lib/admin-redirect";
 import { adminSessionCookie, parseAdminSessionToken } from "@/lib/admin-session-token";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string; next?: string }>;
-}) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const query = await searchParams;
   const env = getAdminEnv();
   const session = parseAdminSessionToken((await cookies()).get(adminSessionCookie)?.value, env.SESSION_SECRET);
-  if (session?.username === env.ADMIN_USERNAME) redirect(safeAdminRedirect(query.next));
+  if (session?.username === env.ADMIN_USERNAME) redirect("/");
 
   return (
     <main className="login-shell">
@@ -28,7 +23,6 @@ export default async function LoginPage({
           </p>
         )}
         <form className="settings-form" action="/api/admin/login" method="post">
-          <input type="hidden" name="next" value={safeAdminRedirect(query.next)} />
           <label>
             <span>Benutzername</span>
             <input name="username" autoComplete="username" required />

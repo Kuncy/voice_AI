@@ -1,7 +1,6 @@
 import { getAdminEnv } from "@heyvera/config";
 import { type NextRequest, NextResponse } from "next/server";
 import { verifyAdminPassword } from "@/lib/admin-password";
-import { safeAdminRedirect } from "@/lib/admin-redirect";
 import { adminSessionCookie, adminSessionTtlMs, createAdminSessionToken } from "@/lib/admin-session-token";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 
@@ -14,7 +13,6 @@ export async function POST(request: NextRequest) {
   const form = await request.formData();
   const username = form.get("username");
   const password = form.get("password");
-  const next = safeAdminRedirect(form.get("next"));
   const env = getAdminEnv();
   if (
     typeof username !== "string" ||
@@ -24,11 +22,10 @@ export async function POST(request: NextRequest) {
   ) {
     const url = new URL("/login", request.url);
     url.searchParams.set("error", "credentials");
-    url.searchParams.set("next", next);
     return NextResponse.redirect(url, 303);
   }
 
-  const response = NextResponse.redirect(new URL(next, request.url), 303);
+  const response = NextResponse.redirect(new URL("/", request.url), 303);
   response.cookies.set(
     adminSessionCookie,
     createAdminSessionToken(

@@ -21,11 +21,11 @@ function authenticatedRequest(path: string): NextRequest {
   });
 }
 
-test("protects the voice UI and preserves the requested page in the login redirect", () => {
+test("protects the voice UI and redirects to login without preserving a subroute", () => {
   const response = authorizeAdminRequest(new NextRequest("http://localhost/?source=test"), env);
 
   assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "http://localhost/login?next=%2F%3Fsource%3Dtest");
+  assert.equal(response.headers.get("location"), "http://localhost/login");
   assert.ok(config.matcher.includes("/"));
 });
 
