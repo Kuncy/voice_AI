@@ -1,11 +1,11 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
 import { readAgentSnapshotForHistory } from "@heyvera/core";
 import { DrizzleConversationRepository } from "@heyvera/db";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { LogoutButton } from "@/components/admin/logout-button";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getWebDatabase } from "@/lib/database";
 import { DeleteConversationButton } from "./delete-conversation-button";
-import { LogoutButton } from "@/components/admin/logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +19,9 @@ const categoryLabels = {
 const urgencyLabels = { LOW: "Niedrig", MEDIUM: "Mittel", HIGH: "Hoch", EMERGENCY: "Notfall" } as const;
 const serviceRequestLabels = { APPOINTMENT: "Terminanfrage", BILLING: "Nebenkostenanfrage" } as const;
 const roleLabels = { USER: "Du", ASSISTANT: "Vera", SYSTEM: "System", TOOL: "Tool" } as const;
+
+type ConversationDetail = NonNullable<Awaited<ReturnType<DrizzleConversationRepository["getDetail"]>>>;
+type DetailToolCall = ConversationDetail["toolCalls"][number];
 
 function duration(value: number | null): string {
   if (value === null) return "–";
@@ -45,6 +48,120 @@ function json(value: unknown): string {
   }
 }
 
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function damageAddress(call: DetailToolCall): string {
+  if (!call.damageStreetAndHouseNumber || !call.damagePostalCode || !call.damageCity) return "Nicht erfasst";
+  return `${call.damageStreetAndHouseNumber}, ${call.damagePostalCode} ${call.damageCity}`;
+}
+
+function IntakeResultCard({ call }: { call: DetailToolCall }) {
+  if (call.damageReportId) {
+    return (
+      <article className="intake-result-card intake-result-damage">
+        <header>
+          <div>
+            <span className="tool-kicker">SCHADENSMELDUNG</span>
+            <h3>#{call.damageReportId.slice(0, 8)}</h3>
+          </div>
+          <span className="status-pill status-succeeded">{call.damageStatus}</span>
+        </header>
+        <p>{call.damageDescription}</p>
+        <dl>
+          <div>
+            <dt>Gemeldet von</dt>
+            <dd>{call.damageReporterName ?? "Nicht erfasst"}</dd>
+          </div>
+          <div>
+            <dt>Objektadresse</dt>
+            <dd>{damageAddress(call)}</dd>
+          </div>
+          {call.damageCategory && (
+            <div>
+              <dt>Kategorie</dt>
+              <dd>{categoryLabels[call.damageCategory]}</dd>
+            </div>
+          )}
+          {call.damageUrgency && (
+            <div>
+              <dt>Dringlichkeit</dt>
+              <dd>{urgencyLabels[call.damageUrgency]}</dd>
+            </div>
+          )}
+        </dl>
+      </article>
+    );
+  }
+
+  if (!call.serviceRequestId || !call.serviceRequestType) return null;
+  return (
+    <article className="intake-result-card intake-result-service">
+      <header>
+        <div>
+          <span className="tool-kicker">{serviceRequestLabels[call.serviceRequestType].toUpperCase()}</span>
+          <h3>#{call.serviceRequestId.slice(0, 8)}</h3>
+        </div>
+        <span className="status-pill status-succeeded">{call.serviceStatus}</span>
+      </header>
+      <p>{call.serviceDescription}</p>
+      <dl>
+        <div>
+          <dt>Angefragt von</dt>
+          <dd>{call.serviceReporterName}</dd>
+        </div>
+        <div>
+          <dt>Objektadresse</dt>
+          <dd>
+            {call.serviceStreetAndHouseNumber}, {call.servicePostalCode} {call.serviceCity}
+          </dd>
+        </div>
+        {call.servicePreferredTimeframe && (
+          <div>
+            <dt>Terminwunsch</dt>
+            <dd>{call.servicePreferredTimeframe}</dd>
+          </div>
+        )}
+      </dl>
+    </article>
+  );
+}
+
+function ToolCallCard({ call, startedAt }: { call: DetailToolCall; startedAt: Date }) {
+  return (
+    <article className="tool-history-card">
+      <header>
+        <div>
+          <span className="tool-kicker">{offset(call.createdAt, startedAt)} · TOOL</span>
+          <h3>{call.toolName}</h3>
+        </div>
+        <span className={`status-pill status-${call.status.toLowerCase()}`}>{call.status}</span>
+      </header>
+      <dl className="tool-meta">
+        <div>
+          <dt>Provider Call ID</dt>
+          <dd>{call.providerCallId}</dd>
+        </div>
+        <div>
+          <dt>Laufzeit</dt>
+          <dd>{call.durationMs === null ? "–" : `${call.durationMs} ms`}</dd>
+        </div>
+        {call.errorCode && (
+          <div>
+            <dt>Fehlercode</dt>
+            <dd>{call.errorCode}</dd>
+          </div>
+        )}
+      </dl>
+      <details className="raw-details">
+        <summary>Argumente und Ergebnis</summary>
+        <pre>{json({ arguments: call.arguments, result: call.result })}</pre>
+      </details>
+    </article>
+  );
+}
+
 export default async function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
@@ -61,15 +178,24 @@ export default async function ConversationDetailPage({ params }: { params: Promi
   return (
     <main className="history-shell">
       <nav className="nav">
-        <Link className="brand-link" href="/"><span className="brand-mark">V</span><span className="brand">HeyVera</span></Link>
-        <Link className="nav-link" href="/settings">Settings</Link>
-        <Link className="nav-link" href="/requests">Vorgänge</Link>
+        <Link className="brand-link" href="/">
+          <span className="brand-mark">V</span>
+          <span className="brand">HeyVera</span>
+        </Link>
+        <Link className="nav-link" href="/settings">
+          Settings
+        </Link>
+        <Link className="nav-link" href="/requests">
+          Vorgänge
+        </Link>
         <LogoutButton />
         <span className="phase-badge">Phase 6 · Detail</span>
       </nav>
 
       <section className="history-card detail-page">
-        <Link className="history-back" href="/conversations">← Alle Conversations</Link>
+        <Link className="history-back" href="/conversations">
+          ← Alle Conversations
+        </Link>
         <div className="detail-heading">
           <div>
             <p className="eyebrow">CONVERSATION</p>
@@ -79,54 +205,56 @@ export default async function ConversationDetailPage({ params }: { params: Promi
         </div>
 
         <div className="detail-facts">
-          <div><span>Agent</span><strong>{snapshot.supported ? snapshot.snapshot.name : "Unbekannt"}</strong></div>
-          <div><span>Tonalität</span><strong>{snapshot.supported ? snapshot.snapshot.tone : "Nicht verfügbar"}</strong></div>
-          <div><span>Dauer</span><strong>{duration(conversation.durationMs)}</strong></div>
-          <div><span>Room</span><strong>{conversation.livekitRoomName}</strong></div>
+          <div>
+            <span>Agent</span>
+            <strong>{snapshot.supported ? snapshot.snapshot.name : "Unbekannt"}</strong>
+          </div>
+          <div>
+            <span>Tonalität</span>
+            <strong>{snapshot.supported ? snapshot.snapshot.tone : "Nicht verfügbar"}</strong>
+          </div>
+          <div>
+            <span>Dauer</span>
+            <strong>{duration(conversation.durationMs)}</strong>
+          </div>
+          <div>
+            <span>Room</span>
+            <strong>{conversation.livekitRoomName}</strong>
+          </div>
         </div>
 
         {!snapshot.supported && (
           <section className="history-warning">
             <strong>Snapshot-Version nicht unterstützt</strong>
             <p>Die Conversation bleibt sichtbar, aber Name und Tonalität konnten nicht sicher gelesen werden.</p>
-            <details><summary>Rohdaten anzeigen</summary><pre>{json(snapshot.raw)}</pre></details>
+            <details>
+              <summary>Rohdaten anzeigen</summary>
+              <pre>{json(snapshot.raw)}</pre>
+            </details>
           </section>
         )}
 
         <section className="detail-section result-section">
-          <div className="section-heading"><h2>Ergebnis</h2><span>{intakeCalls.length} {intakeCalls.length === 1 ? "Vorgang" : "Vorgänge"}</span></div>
+          <div className="section-heading">
+            <h2>Ergebnis</h2>
+            <span>{countLabel(intakeCalls.length, "Vorgang", "Vorgänge")}</span>
+          </div>
           {intakeCalls.length === 0 ? (
             <div className="detail-empty">In diesem Gespräch wurde noch kein strukturierter Vorgang aufgenommen.</div>
           ) : (
             <div className="intake-result-list">
-              {intakeCalls.map((call) => call.damageReportId ? (
-                <article className="intake-result-card intake-result-damage" key={call.damageReportId}>
-                  <header><div><span className="tool-kicker">SCHADENSMELDUNG</span><h3>#{call.damageReportId.slice(0, 8)}</h3></div><span className="status-pill status-succeeded">{call.damageStatus}</span></header>
-                  <p>{call.damageDescription}</p>
-                  <dl>
-                    <div><dt>Gemeldet von</dt><dd>{call.damageReporterName ?? "Nicht erfasst"}</dd></div>
-                    <div><dt>Objektadresse</dt><dd>{call.damageStreetAndHouseNumber && call.damagePostalCode && call.damageCity ? `${call.damageStreetAndHouseNumber}, ${call.damagePostalCode} ${call.damageCity}` : "Nicht erfasst"}</dd></div>
-                    {call.damageCategory && <div><dt>Kategorie</dt><dd>{categoryLabels[call.damageCategory]}</dd></div>}
-                    {call.damageUrgency && <div><dt>Dringlichkeit</dt><dd>{urgencyLabels[call.damageUrgency]}</dd></div>}
-                  </dl>
-                </article>
-              ) : call.serviceRequestId && call.serviceRequestType ? (
-                <article className="intake-result-card intake-result-service" key={call.serviceRequestId}>
-                  <header><div><span className="tool-kicker">{serviceRequestLabels[call.serviceRequestType].toUpperCase()}</span><h3>#{call.serviceRequestId.slice(0, 8)}</h3></div><span className="status-pill status-succeeded">{call.serviceStatus}</span></header>
-                  <p>{call.serviceDescription}</p>
-                  <dl>
-                    <div><dt>Angefragt von</dt><dd>{call.serviceReporterName}</dd></div>
-                    <div><dt>Objektadresse</dt><dd>{call.serviceStreetAndHouseNumber}, {call.servicePostalCode} {call.serviceCity}</dd></div>
-                    {call.servicePreferredTimeframe && <div><dt>Terminwunsch</dt><dd>{call.servicePreferredTimeframe}</dd></div>}
-                  </dl>
-                </article>
-              ) : null)}
+              {intakeCalls.map((call) => (
+                <IntakeResultCard call={call} key={call.id} />
+              ))}
             </div>
           )}
         </section>
 
         <section className="detail-section">
-          <div className="section-heading"><h2>Gesprächsverlauf</h2><span>{messages.length} {messages.length === 1 ? "Beitrag" : "Beiträge"}</span></div>
+          <div className="section-heading">
+            <h2>Gesprächsverlauf</h2>
+            <span>{countLabel(messages.length, "Beitrag", "Beiträge")}</span>
+          </div>
           {messages.length === 0 ? (
             <div className="detail-empty">Für diese Conversation wurden keine finalen Nachrichten gespeichert.</div>
           ) : (
@@ -156,32 +284,26 @@ export default async function ConversationDetailPage({ params }: { params: Promi
         </section>
 
         <section className="detail-section">
-          <div className="section-heading"><h2>Aktionen & Schadensmeldungen</h2><span>{toolCalls.length} {toolCalls.length === 1 ? "Aktion" : "Aktionen"}</span></div>
+          <div className="section-heading">
+            <h2>Aktionen & Schadensmeldungen</h2>
+            <span>{countLabel(toolCalls.length, "Aktion", "Aktionen")}</span>
+          </div>
           {toolCalls.length === 0 ? (
             <div className="detail-empty">In diesem Gespräch wurde keine Aktion ausgeführt.</div>
           ) : (
             <div className="tool-history-list">
               {toolCalls.map((call) => (
-                <article className="tool-history-card" key={call.id}>
-                  <header>
-                    <div><span className="tool-kicker">{offset(call.createdAt, startedAt)} · TOOL</span><h3>{call.toolName}</h3></div>
-                    <span className={`status-pill status-${call.status.toLowerCase()}`}>{call.status}</span>
-                  </header>
-                  <dl className="tool-meta">
-                    <div><dt>Provider Call ID</dt><dd>{call.providerCallId}</dd></div>
-                    <div><dt>Laufzeit</dt><dd>{call.durationMs === null ? "–" : `${call.durationMs} ms`}</dd></div>
-                    {call.errorCode && <div><dt>Fehlercode</dt><dd>{call.errorCode}</dd></div>}
-                  </dl>
-                  <details className="raw-details"><summary>Argumente und Ergebnis</summary><pre>{json({ arguments: call.arguments, result: call.result })}</pre></details>
-
-                </article>
+                <ToolCallCard call={call} key={call.id} startedAt={startedAt} />
               ))}
             </div>
           )}
         </section>
         {!["STARTING", "ACTIVE"].includes(conversation.status) && (
           <section className="detail-section danger-zone">
-            <div><h2>Daten löschen</h2><p>Entfernt diese Conversation und alle zugehörigen Nachrichten, Tool-Aufrufe und Vorgänge.</p></div>
+            <div>
+              <h2>Daten löschen</h2>
+              <p>Entfernt diese Conversation und alle zugehörigen Nachrichten, Tool-Aufrufe und Vorgänge.</p>
+            </div>
             <DeleteConversationButton conversationId={conversation.id} />
           </section>
         )}

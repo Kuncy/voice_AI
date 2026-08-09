@@ -27,12 +27,7 @@ export interface ConversationRepository {
   appendFinalMessage(conversationId: string, message: FinalMessage): Promise<boolean>;
 }
 
-export function itemKey(input: {
-  id?: string | null;
-  role: MessageRole;
-  turnIndex: number;
-  content: string;
-}): string {
+export function itemKey(input: { id?: string | null; role: MessageRole; turnIndex: number; content: string }): string {
   if (input.id) return `lk:${input.id}`;
   const digest = createHash("sha256")
     .update(`${input.role}\u0000${input.turnIndex}\u0000${input.content}`)

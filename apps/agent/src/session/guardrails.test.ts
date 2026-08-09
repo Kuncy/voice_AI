@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionGuardrails, type SessionEndReason } from "./guardrails.js";
+import { type SessionEndReason, SessionGuardrails } from "./guardrails.js";
 
 function setup(maxTurns = 2) {
   const ended: SessionEndReason[] = [];

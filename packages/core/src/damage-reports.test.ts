@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DamageReportService, type DamageReportRepository } from "./damage-reports";
+import { type DamageReportRepository, DamageReportService } from "./damage-reports";
 
 const validReport = {
   reporterName: "Samaster",
@@ -22,30 +22,42 @@ test("damage report service validates before persistence", async () => {
   };
   const service = new DamageReportService(repository);
 
-  assert.deepEqual(await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-invalid",
-    report: { ...validReport, description: "zu kurz" },
-  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.deepEqual(
+    await service.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-invalid",
+      report: { ...validReport, description: "zu kurz" },
+    }),
+    { ok: false, code: "VALIDATION_ERROR" },
+  );
   assert.equal(calls, 0);
 
-  assert.deepEqual(await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-invalid-postal-code",
-    report: { ...validReport, postalCode: "1011" },
-  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.deepEqual(
+    await service.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-invalid-postal-code",
+      report: { ...validReport, postalCode: "1011" },
+    }),
+    { ok: false, code: "VALIDATION_ERROR" },
+  );
 
-  assert.deepEqual(await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-missing-house-number",
-    report: { ...validReport, streetAndHouseNumber: "Musterstraße" },
-  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.deepEqual(
+    await service.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-missing-house-number",
+      report: { ...validReport, streetAndHouseNumber: "Musterstraße" },
+    }),
+    { ok: false, code: "VALIDATION_ERROR" },
+  );
 
-  assert.deepEqual(await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-missing-reporter-name",
-    report: { ...validReport, reporterName: "" },
-  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.deepEqual(
+    await service.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-missing-reporter-name",
+      report: { ...validReport, reporterName: "" },
+    }),
+    { ok: false, code: "VALIDATION_ERROR" },
+  );
   assert.equal(calls, 0);
 });
 
@@ -56,20 +68,26 @@ test("damage report service returns stable success and persistence errors", asyn
       return { damageReportId, status: "open" };
     },
   });
-  assert.deepEqual(await success.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-success",
-    report: validReport,
-  }), { ok: true, damageReportId, status: "open" });
+  assert.deepEqual(
+    await success.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-success",
+      report: validReport,
+    }),
+    { ok: true, damageReportId, status: "open" },
+  );
 
   const failure = new DamageReportService({
     async create() {
       throw new Error("database details must not escape");
     },
   });
-  assert.deepEqual(await failure.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "call-failure",
-    report: validReport,
-  }), { ok: false, code: "PERSISTENCE_ERROR" });
+  assert.deepEqual(
+    await failure.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "call-failure",
+      report: validReport,
+    }),
+    { ok: false, code: "PERSISTENCE_ERROR" },
+  );
 });

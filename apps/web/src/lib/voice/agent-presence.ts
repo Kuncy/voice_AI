@@ -1,4 +1,4 @@
-import { RoomEvent, type Participant, type Room } from "livekit-client";
+import { type Participant, type Room, RoomEvent } from "livekit-client";
 
 export const agentJoinTimeoutMs = 10_000;
 

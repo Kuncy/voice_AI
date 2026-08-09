@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ServiceRequestService, type ServiceRequestRepository } from "./service-requests";
+import { type ServiceRequestRepository, ServiceRequestService } from "./service-requests";
 
 const billingRequest = {
   requestType: "billing" as const,
@@ -22,11 +22,14 @@ test("service request validates type-specific input before persistence", async (
   };
   const service = new ServiceRequestService(repository);
 
-  assert.deepEqual(await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "invalid-appointment",
-    request: { ...billingRequest, requestType: "appointment", preferredTimeframe: null },
-  }), { ok: false, code: "VALIDATION_ERROR" });
+  assert.deepEqual(
+    await service.create({
+      conversationId: crypto.randomUUID(),
+      providerCallId: "invalid-appointment",
+      request: { ...billingRequest, requestType: "appointment", preferredTimeframe: null },
+    }),
+    { ok: false, code: "VALIDATION_ERROR" },
+  );
   assert.equal(calls, 0);
 });
 
@@ -39,15 +42,25 @@ test("service request persists valid billing and appointment requests", async ()
     },
   });
 
-  assert.equal((await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "billing-call",
-    request: billingRequest,
-  })).ok, true);
-  assert.equal((await service.create({
-    conversationId: crypto.randomUUID(),
-    providerCallId: "appointment-call",
-    request: { ...billingRequest, requestType: "appointment", preferredTimeframe: "Montagvormittag" },
-  })).ok, true);
+  assert.equal(
+    (
+      await service.create({
+        conversationId: crypto.randomUUID(),
+        providerCallId: "billing-call",
+        request: billingRequest,
+      })
+    ).ok,
+    true,
+  );
+  assert.equal(
+    (
+      await service.create({
+        conversationId: crypto.randomUUID(),
+        providerCallId: "appointment-call",
+        request: { ...billingRequest, requestType: "appointment", preferredTimeframe: "Montagvormittag" },
+      })
+    ).ok,
+    true,
+  );
   assert.deepEqual(saved, ["billing", "appointment"]);
 });

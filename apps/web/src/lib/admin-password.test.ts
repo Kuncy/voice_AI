@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { scryptSync } from "node:crypto";
+import test from "node:test";
 import { verifyAdminPassword } from "./admin-password";
 
 test("verifies only the password represented by the configured scrypt hash", () => {

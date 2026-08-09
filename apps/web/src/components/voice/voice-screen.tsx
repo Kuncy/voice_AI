@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { FakeVoiceTransport } from "@/lib/voice/fake-transport";
 import { LiveKitVoiceTransport } from "@/lib/voice/livekit-transport";
-import type { ToolStatusEvent, TranscriptEvent, VoiceState, VoiceTransport } from "@/lib/voice/transport";
 import { reconcileTranscript } from "@/lib/voice/transcript-reducer";
+import type { ToolStatusEvent, TranscriptEvent, VoiceState, VoiceTransport } from "@/lib/voice/transport";
 
 const labels: Record<VoiceState, string> = {
   idle: "Bereit",
@@ -17,6 +17,29 @@ const labels: Record<VoiceState, string> = {
   disconnecting: "Gespräch wird beendet",
   error: "Verbindung fehlgeschlagen",
 };
+
+const toolStatusIcons: Record<ToolStatusEvent["status"], string> = {
+  started: "↻",
+  succeeded: "✓",
+  failed: "!",
+};
+
+function callButtonLabel(isRunning: boolean, canReconnect: boolean): string {
+  if (isRunning) return "Gespräch beenden";
+  if (canReconnect) return "Verbindung wiederherstellen";
+  return "Gespräch starten";
+}
+
+function toolStatusLabel(event: ToolStatusEvent): string {
+  const isDamageReport = event.name === "create_damage_report";
+  if (event.status === "started") {
+    return isDamageReport ? "Schadensmeldung wird gespeichert" : "Anfrage wird gespeichert";
+  }
+  if (event.status === "succeeded") {
+    return isDamageReport ? "Schadensmeldung gespeichert" : "Anfrage gespeichert";
+  }
+  return isDamageReport ? "Schadensmeldung konnte nicht gespeichert werden" : "Anfrage konnte nicht gespeichert werden";
+}
 
 export function VoiceScreen() {
   const audioRoot = useRef<HTMLDivElement>(null);
@@ -32,9 +55,7 @@ export function VoiceScreen() {
     const useFake =
       process.env.NODE_ENV !== "production" &&
       new URLSearchParams(window.location.search).get("voiceTransport") === "fake";
-    const instance = useFake
-      ? new FakeVoiceTransport()
-      : new LiveKitVoiceTransport(audioRoot.current);
+    const instance = useFake ? new FakeVoiceTransport() : new LiveKitVoiceTransport(audioRoot.current);
     transport.current = instance;
     const unsubscribeState = instance.onStateChange(setState);
     const unsubscribeTranscript = instance.onTranscript((event) => {
@@ -79,9 +100,15 @@ export function VoiceScreen() {
       <nav className="nav">
         <span className="brand-mark">V</span>
         <span className="brand">HeyVera</span>
-        <Link className="nav-link" href="/conversations">Conversations</Link>
-        <Link className="nav-link" href="/requests">Vorgänge</Link>
-        <Link className="nav-link" href="/settings">Settings</Link>
+        <Link className="nav-link" href="/conversations">
+          Conversations
+        </Link>
+        <Link className="nav-link" href="/requests">
+          Vorgänge
+        </Link>
+        <Link className="nav-link" href="/settings">
+          Settings
+        </Link>
         <span className="phase-badge">Voice Assistant</span>
       </nav>
 
@@ -93,23 +120,27 @@ export function VoiceScreen() {
         </div>
         <p className="eyebrow">DEUTSCH · LIVE</p>
         <h1>Sprich mit Vera.</h1>
-        <p className="status"><i className={`status-dot status-dot-${state}`} />{labels[state]}</p>
+        <p className="status">
+          <i className={`status-dot status-dot-${state}`} />
+          {labels[state]}
+        </p>
 
-        <button className={isRunning ? "call-button stop" : "call-button"} onClick={toggleCall} disabled={isBusy}>
+        <button
+          type="button"
+          className={isRunning ? "call-button stop" : "call-button"}
+          onClick={toggleCall}
+          disabled={isBusy}
+        >
           <span className="button-icon">{isRunning ? "■" : "●"}</span>
-          {isRunning ? "Gespräch beenden" : canReconnect ? "Verbindung wiederherstellen" : "Gespräch starten"}
+          {callButtonLabel(isRunning, canReconnect)}
         </button>
 
         {error && <p className="error-message">{error}</p>}
         {notice && <p className="notice-message">{notice}</p>}
         {toolStatus && (
           <p className={`tool-status tool-status-${toolStatus.status}`} role="status">
-            <span aria-hidden="true">{toolStatus.status === "started" ? "↻" : toolStatus.status === "succeeded" ? "✓" : "!"}</span>
-            {toolStatus.status === "started"
-              ? toolStatus.name === "create_damage_report" ? "Schadensmeldung wird gespeichert" : "Anfrage wird gespeichert"
-              : toolStatus.status === "succeeded"
-                ? toolStatus.name === "create_damage_report" ? "Schadensmeldung gespeichert" : "Anfrage gespeichert"
-                : toolStatus.name === "create_damage_report" ? "Schadensmeldung konnte nicht gespeichert werden" : "Anfrage konnte nicht gespeichert werden"}
+            <span aria-hidden="true">{toolStatusIcons[toolStatus.status]}</span>
+            {toolStatusLabel(toolStatus)}
           </p>
         )}
 
@@ -120,7 +151,9 @@ export function VoiceScreen() {
           </div>
           <div className="transcript-list">
             {transcripts.length === 0 ? (
-              <p className="empty-copy">Starte ein Gespräch. Deine finalen und laufenden Sprachbeiträge erscheinen hier.</p>
+              <p className="empty-copy">
+                Starte ein Gespräch. Deine finalen und laufenden Sprachbeiträge erscheinen hier.
+              </p>
             ) : (
               transcripts.map((entry) => (
                 <p className={`transcript transcript-${entry.speaker}`} key={entry.id}>

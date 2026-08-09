@@ -46,7 +46,9 @@ export const conversations = pgTable(
   "conversations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agentId: uuid("agent_id").notNull().references(() => agents.id),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id),
     livekitRoomName: text("livekit_room_name").notNull(),
     status: conversationStatus("status").notNull().default("STARTING"),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -67,7 +69,9 @@ export const messages = pgTable(
   "messages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
     externalItemId: text("external_item_id").notNull(),
     sequence: integer("sequence").notNull(),
     role: messageRole("role").notNull(),
@@ -88,7 +92,9 @@ export const toolCalls = pgTable(
   "tool_calls",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
     messageId: uuid("message_id").references(() => messages.id, { onDelete: "set null" }),
     providerCallId: text("provider_call_id").notNull(),
     toolName: text("tool_name").notNull(),
@@ -107,8 +113,13 @@ export const toolCalls = pgTable(
 
 export const damageReports = pgTable("damage_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
-  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  toolCallId: uuid("tool_call_id")
+    .notNull()
+    .unique()
+    .references(() => toolCalls.id, { onDelete: "cascade" }),
   reporterName: text("reporter_name"),
   category: damageCategory("category").notNull(),
   description: text("description").notNull(),
@@ -122,8 +133,13 @@ export const damageReports = pgTable("damage_reports", {
 
 export const serviceRequests = pgTable("service_requests", {
   id: uuid("id").primaryKey().defaultRandom(),
-  conversationId: uuid("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  toolCallId: uuid("tool_call_id").notNull().unique().references(() => toolCalls.id, { onDelete: "cascade" }),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  toolCallId: uuid("tool_call_id")
+    .notNull()
+    .unique()
+    .references(() => toolCalls.id, { onDelete: "cascade" }),
   requestType: serviceRequestType("request_type").notNull(),
   reporterName: text("reporter_name").notNull(),
   description: text("description").notNull(),

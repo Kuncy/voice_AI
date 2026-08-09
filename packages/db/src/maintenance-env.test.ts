@@ -3,10 +3,12 @@ import test from "node:test";
 import { getMaintenanceEnv, getRuntimeConfig } from "../../config/src/index";
 
 test("maintenance timing rejects blank values instead of treating them as zero", () => {
-  assert.throws(() => getMaintenanceEnv({
-    DATABASE_URL: "postgresql://example.invalid/test",
-    MAX_SESSION_MS: "",
-  }));
+  assert.throws(() =>
+    getMaintenanceEnv({
+      DATABASE_URL: "postgresql://example.invalid/test",
+      MAX_SESSION_MS: "",
+    }),
+  );
   assert.deepEqual(getMaintenanceEnv({ DATABASE_URL: "postgresql://example.invalid/test" }), {
     DATABASE_URL: "postgresql://example.invalid/test",
     MAX_SESSION_MS: 600_000,

@@ -32,10 +32,7 @@ export class SessionGuardrails {
 
   public start(): void {
     if (this.durationTimer || this.ended) return;
-    this.durationTimer = this.schedule(
-      () => this.end("max_duration"),
-      this.options.maxDurationMs,
-    );
+    this.durationTimer = this.schedule(() => this.end("max_duration"), this.options.maxDurationMs);
     this.durationTimer.unref?.();
   }
 

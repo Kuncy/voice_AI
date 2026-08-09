@@ -6,10 +6,7 @@ import type { NextConfig } from "next";
 // development, also load the shared root env without overriding variables
 // injected by the runtime (for example, by Coolify).
 dotenv.config({
-  path: [
-    path.join(import.meta.dirname, "../../.env.local"),
-    path.join(import.meta.dirname, "../../.env"),
-  ],
+  path: [path.join(import.meta.dirname, "../../.env.local"), path.join(import.meta.dirname, "../../.env")],
 });
 
 const nextConfig: NextConfig = {

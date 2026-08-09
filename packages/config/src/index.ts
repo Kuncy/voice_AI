@@ -1,9 +1,12 @@
 import { z } from "zod";
 
 const liveKitEnvSchema = z.object({
-  LIVEKIT_URL: z.string().url().refine((value) => value.startsWith("wss://") || value.startsWith("ws://"), {
-    message: "LIVEKIT_URL must use ws:// or wss://",
-  }),
+  LIVEKIT_URL: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("wss://") || value.startsWith("ws://"), {
+      message: "LIVEKIT_URL must use ws:// or wss://",
+    }),
   LIVEKIT_API_KEY: z.string().min(1),
   LIVEKIT_API_SECRET: z.string().min(1),
   LIVEKIT_AGENT_NAME: z.string().min(1).default("heyvera"),
