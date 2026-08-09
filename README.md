@@ -1,6 +1,6 @@
 # HeyVera
 
-HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Phase 6 macht persistierte Conversations vollständig nachvollziehbar: Die History zeigt zeitgestempelte User-/Assistant-Nachrichten, Tool Calls, Agent-Snapshot und den gespeicherten Damage Report. Vera kann ein abgeschlossenes Gespräch nach einer kurzen Verabschiedung nun auch selbst beenden.
+HeyVera ist eine deutschsprachige Voice-First-Anwendung auf Basis von LiveKit. Die Anwendung nimmt Schadensmeldungen, Terminwünsche und Nebenkostenanfragen per Sprache auf, speichert bestätigte Vorgänge in PostgreSQL und macht Conversations samt Tool-Aufrufen nachvollziehbar. Sämtliche App-Routen sind durch eine Admin-Anmeldung geschützt.
 
 Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das direkte Deepgram-Plugin für STT und TTS sowie das direkte OpenAI-Plugin für das LLM. Für Deepgram Flux STT und Aura‑2 TTS wird derselbe API-Key verwendet. LiveKit Inference und ElevenLabs sind im initialen Pfad bewusst nicht Bestandteil der Architektur, damit vorhandene Provider-Guthaben genutzt werden.
 
@@ -17,6 +17,24 @@ Voraussetzungen: Node.js 22+, pnpm 11, Docker und ein LiveKit-Cloud-Projekt.
 7. Unter `http://localhost:3000/login` mit `ADMIN_USERNAME` und dem zum Hash gehörenden Passwort anmelden. Danach kann Vera unter `/settings` konfiguriert werden; Änderungen gelten ab dem nächsten neu gestarteten Gespräch.
 
 Ohne echte Credentials kann die UI deterministisch über `http://localhost:3000/?voiceTransport=fake` geprüft werden.
+
+Für eine reproduzierbare Demo können nach der Migration zwei ausschließlich als Demo markierte Conversations angelegt werden:
+
+```sh
+pnpm db:seed
+```
+
+`pnpm db:reset-demo` entfernt nur die Conversations mit den festen Room-Namen `demo-damage-report` und `demo-appointment-request` samt abhängigen Datensätzen. Echte Conversations bleiben unberührt. Ein erneutes `pnpm db:seed` ersetzt die Demo-Daten idempotent.
+
+## Architektur
+
+- `apps/web`: Next.js-Oberfläche, Admin-Session, Voice-Session-Endpunkte und serverseitige History-/Settings-Seiten.
+- `apps/agent`: langlebiger LiveKit-Worker für Deepgram STT/TTS, OpenAI und die fachlichen Tools.
+- `packages/core`: Provider-unabhängige Schemas, Services, Prompt-Regeln und Conversation-Typen.
+- `packages/db`: Drizzle-Schema, Migrationen und PostgreSQL-Repositories.
+- `packages/config`: zentrale Zod-Validierung aller Runtime-Konfigurationen.
+
+Der Browser erhält nur kurzlebige, minimal berechtigte LiveKit-Tokens. Fachliche Schreibvorgänge laufen transaktional und idempotent über den Agent-Worker. Jede Conversation speichert Agent- und Runtime-Snapshots, damit ältere Gespräche auch nach einer Einstellungsänderung reproduzierbar bleiben.
 
 ## Coolify
 
@@ -130,3 +148,13 @@ Manueller Voice-Smoke-Test für Phase 7:
 3. Eine normale kurze Antwort wie „ja“ geben; sie muss als finaler Turn ankommen, ohne einen laufenden Vera-Turn fälschlich zu unterbrechen.
 4. Während eines aktiven Gesprächs die Netzwerkverbindung kurz trennen. Zuerst muss der automatische SDK-Reconnect erscheinen; nach einem terminalen Abbruch muss „Verbindung wiederherstellen“ dieselbe Conversation fortsetzen.
 5. In der Conversation-History prüfen, dass unterbrochene Vera-Texte markiert sind und der vollständig generierte Resttext nur aufklappbar erscheint.
+
+## Release-Verifikation
+
+- `pnpm quality` prüft Formatierung, Lint und TypeScript.
+- `pnpm test` führt Unit- und PostgreSQL-Integrationstests aus. Die Integrationstests enthalten ausdrücklich die transaktionale und idempotente Speicherung eines Terminwunsches samt gewünschtem Zeitraum.
+- `pnpm test:e2e` prüft im Browser den Login-Schutz, die Weiterleitung auf `/`, den Fake-Voice-Start-/Stop-Flow und einen sichtbaren Verbindungsfehler.
+- `pnpm build` baut alle Workspace-Pakete produktionsnah.
+- GitHub Actions führt Migration, Quality, Tests, Build und Chromium-E2E bei jedem Pull Request sowie bei Pushes auf `main` aus.
+
+Das manuelle Demo-Drehbuch, der echte Provider-Smoke-Test und die Coolify-Abnahme stehen in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md).

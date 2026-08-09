@@ -55,7 +55,10 @@ export function VoiceScreen() {
     const useFake =
       process.env.NODE_ENV !== "production" &&
       new URLSearchParams(window.location.search).get("voiceTransport") === "fake";
-    const instance = useFake ? new FakeVoiceTransport() : new LiveKitVoiceTransport(audioRoot.current);
+    const fakeScenario = new URLSearchParams(window.location.search).get("fakeScenario");
+    const instance = useFake
+      ? new FakeVoiceTransport(fakeScenario === "connection-error" ? "connection-error" : "default")
+      : new LiveKitVoiceTransport(audioRoot.current);
     transport.current = instance;
     const unsubscribeState = instance.onStateChange(setState);
     const unsubscribeTranscript = instance.onTranscript((event) => {

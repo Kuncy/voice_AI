@@ -11,6 +11,8 @@ export class FakeVoiceTransport implements VoiceTransport {
   private currentState: VoiceState = "idle";
   private readonly stateListeners = new Set<(state: VoiceState) => void>();
 
+  public constructor(private readonly scenario: "default" | "connection-error" = "default") {}
+
   public get state(): VoiceState {
     return this.currentState;
   }
@@ -21,6 +23,10 @@ export class FakeVoiceTransport implements VoiceTransport {
 
   public async connect(): Promise<void> {
     this.setState("connecting");
+    if (this.scenario === "connection-error") {
+      this.setState("error");
+      throw new Error("Die Testverbindung konnte nicht aufgebaut werden.");
+    }
     this.setState("listening");
   }
 

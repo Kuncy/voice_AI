@@ -12,6 +12,8 @@
     "dev:web": "pnpm --filter @heyvera/web dev",
     "dev:agent": "pnpm --filter @heyvera/agent dev",
     "db:migrate": "pnpm --filter @heyvera/db migrate",
+    "db:seed": "pnpm --filter @heyvera/db exec tsx ../../scripts/seed-demo-data.ts",
+    "db:reset-demo": "pnpm --filter @heyvera/db exec tsx ../../scripts/reset-demo-data.ts",
     "db:sweep": "pnpm --filter @heyvera/db exec tsx ../../scripts/sweep-stale-conversations.ts",
     "db:prune": "pnpm --filter @heyvera/db exec tsx ../../scripts/prune-conversation-data.ts",
     "auth:hash": "node scripts/hash-admin-password.mjs",
@@ -21,10 +23,12 @@
     "quality": "pnpm format:check && pnpm lint && pnpm typecheck",
     "start": "turbo start",
     "test": "turbo test",
+    "test:e2e": "playwright test",
     "typecheck": "turbo typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.7",
+    "@playwright/test": "^1.62.1",
     "turbo": "2.10.8",
     "typescript": "5.9.3"
   }

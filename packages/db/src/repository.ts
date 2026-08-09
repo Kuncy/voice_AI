@@ -342,6 +342,15 @@ export class DrizzleConversationRepository implements ConversationRepository {
     return deleted.length > 0;
   }
 
+  public async deleteByRoomNames(roomNames: string[]): Promise<number> {
+    if (roomNames.length === 0) return 0;
+    const deleted = await this.db
+      .delete(conversations)
+      .where(inArray(conversations.livekitRoomName, roomNames))
+      .returning({ id: conversations.id });
+    return deleted.length;
+  }
+
   public async deleteTerminalBefore(cutoff: Date): Promise<number> {
     const deleted = await this.db
       .delete(conversations)
