@@ -10,7 +10,7 @@ import {
   type FinalMessage,
   type ServiceRequestRepository,
 } from "@heyvera/core";
-import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, max, sql } from "drizzle-orm";
 import type { Database } from "./client";
 import { agents, conversations, damageReports, messages, serviceRequests, toolCalls } from "./schema";
 
@@ -417,8 +417,17 @@ export class DrizzleConversationRepository implements ConversationRepository {
     });
   }
 
-  public async list(limit = 50) {
-    return this.db
+  public async list(
+    options: {
+      limit?: number;
+      since?: Date;
+      status?: "STARTING" | "ACTIVE" | "COMPLETED" | "FAILED" | "ABANDONED";
+    } = {},
+  ) {
+    const filters = [];
+    if (options.since) filters.push(gte(conversations.createdAt, options.since));
+    if (options.status) filters.push(eq(conversations.status, options.status));
+    const rows = await this.db
       .select({
         id: conversations.id,
         createdAt: conversations.createdAt,
@@ -429,8 +438,43 @@ export class DrizzleConversationRepository implements ConversationRepository {
         agentSnapshot: conversations.agentSnapshot,
       })
       .from(conversations)
+      .where(filters.length > 0 ? and(...filters) : undefined)
       .orderBy(desc(conversations.createdAt))
-      .limit(limit);
+      .limit(options.limit ?? 50);
+
+    if (rows.length === 0) return [];
+    const conversationIds = rows.map((row) => row.id);
+    const [damageIntakes, serviceIntakes] = await Promise.all([
+      this.db
+        .select({
+          conversationId: damageReports.conversationId,
+          kind: damageReports.category,
+          reporterName: damageReports.reporterName,
+          createdAt: damageReports.createdAt,
+        })
+        .from(damageReports)
+        .where(inArray(damageReports.conversationId, conversationIds)),
+      this.db
+        .select({
+          conversationId: serviceRequests.conversationId,
+          kind: serviceRequests.requestType,
+          reporterName: serviceRequests.reporterName,
+          createdAt: serviceRequests.createdAt,
+        })
+        .from(serviceRequests)
+        .where(inArray(serviceRequests.conversationId, conversationIds)),
+    ]);
+    const summaries = new Map<string, Array<{ kind: string; reporterName: string | null; createdAt: Date }>>();
+    for (const intake of [...damageIntakes, ...serviceIntakes]) {
+      const current = summaries.get(intake.conversationId) ?? [];
+      current.push({ kind: intake.kind, reporterName: intake.reporterName, createdAt: intake.createdAt });
+      summaries.set(intake.conversationId, current);
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      intakeSummaries: (summaries.get(row.id) ?? []).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+    }));
   }
 
   public async getDetail(conversationId: string) {

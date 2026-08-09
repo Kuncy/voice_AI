@@ -6,7 +6,7 @@ import { type SettingsActionState, updateAgentSettings } from "./actions";
 
 const initialSettingsActionState: SettingsActionState = { status: "idle" };
 
-export function SettingsForm({ settings }: { settings: AgentSettings }) {
+export function SettingsForm({ settings, updatedAt }: { settings: AgentSettings; updatedAt: string }) {
   const [state, formAction, pending] = useActionState(updateAgentSettings, initialSettingsActionState);
   const [values, setValues] = useState(settings);
 
@@ -72,7 +72,7 @@ export function SettingsForm({ settings }: { settings: AgentSettings }) {
             onChange={(event) => setValues((current) => ({ ...current, systemPrompt: event.target.value }))}
             minLength={20}
             maxLength={4_000}
-            rows={9}
+            rows={8}
             required
           />
           <small>
@@ -94,6 +94,9 @@ export function SettingsForm({ settings }: { settings: AgentSettings }) {
           <p className={`form-message form-message-${state.status}`} aria-live="polite">
             {state.message}
           </p>
+        )}
+        {!state.message && (
+          <p className="last-saved">Zuletzt gespeichert {new Date(updatedAt).toLocaleString("de-DE")}</p>
         )}
       </div>
     </form>

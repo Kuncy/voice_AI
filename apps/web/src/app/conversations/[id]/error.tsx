@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { AdminNav } from "@/components/admin/admin-nav";
 
 export default function ConversationError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -9,8 +10,9 @@ export default function ConversationError({ error, reset }: { error: Error & { d
   }, [error]);
 
   return (
-    <main className="history-shell">
-      <section className="history-card detail-state">
+    <main className="admin-shell">
+      <AdminNav active="conversations" />
+      <section className="admin-content detail-state">
         <p className="eyebrow">FEHLER</p>
         <h1>Conversation konnte nicht geladen werden.</h1>
         <p>Bitte versuche es erneut. Die gespeicherten Daten bleiben unverändert.</p>

@@ -1,19 +1,13 @@
 import { DrizzleIntakeRepository } from "@heyvera/db";
 import Link from "next/link";
-import { LogoutButton } from "@/components/admin/logout-button";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getWebDatabase } from "@/lib/database";
 
 export const dynamic = "force-dynamic";
 
-const kindLabels = {
-  DAMAGE: "Schadensmeldung",
-  APPOINTMENT: "Terminanfrage",
-  BILLING: "Nebenkostenanfrage",
-} as const;
-
+const kindLabels = { DAMAGE: "Schadensmeldung", APPOINTMENT: "Terminanfrage", BILLING: "Nebenkostenanfrage" } as const;
 const urgencyLabels = { LOW: "Niedrig", MEDIUM: "Mittel", HIGH: "Hoch", EMERGENCY: "Notfall" } as const;
-
 type IntakeRow = Awaited<ReturnType<DrizzleIntakeRepository["list"]>>[number];
 
 function requestAddress(row: IntakeRow): string {
@@ -37,90 +31,80 @@ export default async function RequestsPage() {
   };
 
   return (
-    <main className="history-shell">
-      <nav className="nav">
-        <Link className="brand-link" href="/">
-          <span className="brand-mark">V</span>
-          <span className="brand">HeyVera</span>
-        </Link>
-        <Link className="nav-link" href="/conversations">
-          Conversations
-        </Link>
-        <Link className="nav-link" href="/settings">
-          Settings
-        </Link>
-        <LogoutButton />
-        <span className="phase-badge">Intake · Übersicht</span>
-      </nav>
-      <section className="history-card requests-page">
-        <p className="eyebrow">VORGANGSÜBERSICHT</p>
-        <h1>Alle Meldungen.</h1>
-        <p className="history-intro">Schäden, Terminwünsche und Nebenkostenanfragen – neueste zuerst.</p>
-        <div className="request-stats">
+    <main className="admin-shell">
+      <AdminNav active="requests" />
+      <section className="admin-content requests-page">
+        <div className="page-heading">
           <div>
+            <h1>Alle Meldungen.</h1>
+            <p>Schäden, Terminwünsche und Nebenkostenanfragen – neueste zuerst.</p>
+          </div>
+        </div>
+        <div className="request-stats">
+          <div className="stat-total">
             <strong>{counts.total}</strong>
             <span>Gesamt</span>
           </div>
-          <div>
+          <div className="stat-damage">
             <strong>{counts.damage}</strong>
             <span>Schäden</span>
           </div>
-          <div>
+          <div className="stat-appointment">
             <strong>{counts.appointments}</strong>
             <span>Termine</span>
           </div>
-          <div>
+          <div className="stat-billing">
             <strong>{counts.billing}</strong>
             <span>Nebenkosten</span>
           </div>
         </div>
-        <div className="history-table-wrap">
-          <table className="history-table requests-table">
-            <thead>
-              <tr>
-                <th>Zeitpunkt</th>
-                <th>Typ</th>
-                <th>Person / Objekt</th>
-                <th>Anliegen</th>
-                <th>Priorität</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.kind}-${row.id}`}>
-                  <td>{row.createdAt.toLocaleString("de-DE")}</td>
-                  <td>
-                    <span className={`request-kind request-kind-${row.kind.toLowerCase()}`}>
-                      {kindLabels[row.kind]}
-                    </span>
-                  </td>
-                  <td>
-                    <strong>{row.reporterName ?? "Nicht erfasst"}</strong>
-                    <small>{requestAddress(row)}</small>
-                  </td>
-                  <td className="request-description">{row.description}</td>
-                  <td>{requestPriority(row)}</td>
-                  <td>
-                    <span className="status-pill status-succeeded">{row.status}</span>
-                  </td>
-                  <td>
-                    <Link className="history-detail-link" href={`/conversations/${row.conversationId}`}>
-                      Conversation →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td className="history-empty" colSpan={7}>
-                    Noch keine Meldungen oder Anfragen gespeichert.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="data-grid requests-grid">
+          <div className="data-grid-head">
+            <span>ZEITPUNKT</span>
+            <span>TYP</span>
+            <span>PERSON / OBJEKT</span>
+            <span>ANLIEGEN</span>
+            <span>PRIORITÄT</span>
+            <span>STATUS</span>
+            <span />
+          </div>
+          {rows.map((row) => (
+            <article className="data-grid-row" key={`${row.kind}-${row.id}`}>
+              <Link
+                className="data-primary numeric"
+                data-label="Zeitpunkt"
+                href={`/conversations/${row.conversationId}`}
+              >
+                {row.createdAt.toLocaleString("de-DE")}
+              </Link>
+              <span data-label="Typ">
+                <span className={`request-kind request-kind-${row.kind.toLowerCase()}`}>{kindLabels[row.kind]}</span>
+              </span>
+              <span className="request-person" data-label="Person / Objekt">
+                <strong>{row.reporterName ?? "Nicht erfasst"}</strong>
+                <small>{requestAddress(row)}</small>
+              </span>
+              <span className="request-description" data-label="Anliegen">
+                {row.description}
+              </span>
+              <span
+                className={row.urgency ? `priority priority-${row.urgency.toLowerCase()}` : "priority"}
+                data-label="Priorität"
+              >
+                {requestPriority(row)}
+              </span>
+              <span data-label="Status">
+                <span className="status-pill status-succeeded">
+                  <i className="pill-dot" />
+                  {row.status}
+                </span>
+              </span>
+              <Link className="data-action" data-label="Conversation" href={`/conversations/${row.conversationId}`}>
+                Conversation →
+              </Link>
+            </article>
+          ))}
+          {rows.length === 0 && <div className="data-empty">Noch keine Meldungen oder Anfragen gespeichert.</div>}
         </div>
       </section>
     </main>

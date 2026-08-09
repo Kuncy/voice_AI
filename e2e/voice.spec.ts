@@ -27,7 +27,7 @@ test("shows a useful error when the fake connection fails", async ({ page }) => 
 
   await page.goto("/?voiceTransport=fake&fakeScenario=connection-error");
   await page.getByRole("button", { name: "Gespräch starten" }).click();
-  await expect(page.getByText("Verbindung fehlgeschlagen", { exact: true })).toBeVisible();
+  await expect(page.getByText("Verbindung unterbrochen", { exact: true })).toBeVisible();
   await expect(page.getByText("Die Testverbindung konnte nicht aufgebaut werden.", { exact: true })).toBeVisible();
 });
 

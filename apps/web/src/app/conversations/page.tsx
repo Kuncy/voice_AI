@@ -1,11 +1,24 @@
-import { readAgentSnapshotForHistory } from "@heyvera/core";
 import { DrizzleConversationRepository } from "@heyvera/db";
 import Link from "next/link";
-import { LogoutButton } from "@/components/admin/logout-button";
+import { AdminNav } from "@/components/admin/admin-nav";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getWebDatabase } from "@/lib/database";
+import { ConversationFilters } from "./conversation-filters";
 
 export const dynamic = "force-dynamic";
+
+const resultLabels: Record<string, string> = {
+  HEATING: "Schadensmeldung Heizung",
+  WATER: "Schadensmeldung Wasser",
+  ELECTRICITY: "Schadensmeldung Elektrik",
+  STRUCTURAL: "Schadensmeldung Gebäudeschaden",
+  OTHER: "Schadensmeldung Sonstiges",
+  APPOINTMENT: "Terminanfrage",
+  BILLING: "Nebenkostenanfrage",
+};
+
+const allowedStatuses = ["ACTIVE", "COMPLETED", "FAILED", "ABANDONED"] as const;
+type FilterStatus = (typeof allowedStatuses)[number];
 
 function duration(value: number | null): string {
   if (value === null) return "–";
@@ -13,75 +26,72 @@ function duration(value: number | null): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} min`;
 }
 
-export default async function ConversationsPage() {
+function resultSummary(intakes: Array<{ kind: string; reporterName: string | null }>): string {
+  const primary = intakes[0];
+  if (!primary) return "Kein strukturierter Vorgang";
+  const first = `${resultLabels[primary.kind] ?? "Vorgang"}${primary.reporterName ? ` · ${primary.reporterName}` : ""}`;
+  return intakes.length === 1 ? first : `${intakes.length} Vorgänge · ${first}`;
+}
+
+export default async function ConversationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; status?: string }>;
+}) {
   await requireAdmin();
-  const rows = await new DrizzleConversationRepository(getWebDatabase().db).list();
+  const query = await searchParams;
+  const period = query.period === "30" || query.period === "all" ? query.period : "7";
+  const status = allowedStatuses.includes(query.status as FilterStatus) ? (query.status as FilterStatus) : "all";
+  const since = period === "all" ? undefined : new Date(Date.now() - Number(period) * 24 * 60 * 60 * 1_000);
+  const rows = await new DrizzleConversationRepository(getWebDatabase().db).list({
+    since,
+    status: status === "all" ? undefined : status,
+  });
 
   return (
-    <main className="history-shell">
-      <nav className="nav">
-        <Link className="brand-link" href="/">
-          <span className="brand-mark">V</span>
-          <span className="brand">HeyVera</span>
-        </Link>
-        <Link className="nav-link" href="/settings">
-          Settings
-        </Link>
-        <Link className="nav-link" href="/requests">
-          Vorgänge
-        </Link>
-        <LogoutButton />
-        <span className="phase-badge">Conversations · Übersicht</span>
-      </nav>
-      <section className="history-card">
-        <p className="eyebrow">TECHNISCHE VERIFIKATION</p>
-        <h1>Conversations</h1>
-        <p className="history-intro">Persistierte Voice-Sessions, neueste zuerst.</p>
-        <div className="history-table-wrap">
-          <table className="history-table">
-            <thead>
-              <tr>
-                <th>Zeitpunkt</th>
-                <th>Agent</th>
-                <th>Status</th>
-                <th>Dauer</th>
-                <th>Fehlercode</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const agent = readAgentSnapshotForHistory(row.agentSnapshot);
-                return (
-                  <tr key={row.id}>
-                    <td>
-                      <Link className="history-primary-link" href={`/conversations/${row.id}`}>
-                        {row.createdAt.toLocaleString("de-DE")}
-                      </Link>
-                    </td>
-                    <td>{agent.supported ? agent.snapshot.name : "Unbekannter Snapshot"}</td>
-                    <td>
-                      <span className={`status-pill status-${row.status.toLowerCase()}`}>{row.status}</span>
-                    </td>
-                    <td>{duration(row.durationMs)}</td>
-                    <td>{row.failureCode ?? "–"}</td>
-                    <td>
-                      <Link className="history-detail-link" href={`/conversations/${row.id}`}>
-                        Ansehen →
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td className="history-empty" colSpan={6}>
-                    Noch keine Conversations gespeichert.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+    <main className="admin-shell">
+      <AdminNav active="conversations" />
+      <section className="admin-content conversations-page">
+        <div className="page-heading">
+          <div>
+            <h1>Conversations</h1>
+            <p>Persistierte Voice-Sessions, neueste zuerst.</p>
+          </div>
+          <ConversationFilters period={period} status={status} />
+        </div>
+        <div className="data-grid conversations-grid">
+          <div className="data-grid-head">
+            <span>ZEITPUNKT</span>
+            <span>ERGEBNIS</span>
+            <span>STATUS</span>
+            <span>DAUER</span>
+            <span>FEHLERCODE</span>
+            <span />
+          </div>
+          {rows.map((row) => (
+            <article className="data-grid-row" key={row.id}>
+              <Link className="data-primary" data-label="Zeitpunkt" href={`/conversations/${row.id}`}>
+                {row.createdAt.toLocaleString("de-DE")}
+              </Link>
+              <span className="data-secondary" data-label="Ergebnis">
+                {resultSummary(row.intakeSummaries)}
+              </span>
+              <span data-label="Status">
+                <span className={`status-pill status-${row.status.toLowerCase()}`}>
+                  <i className="pill-dot" />
+                  {row.status}
+                </span>
+              </span>
+              <span className="numeric" data-label="Dauer">
+                {duration(row.durationMs)}
+              </span>
+              <code data-label="Fehlercode">{row.failureCode ?? "–"}</code>
+              <Link className="data-action" href={`/conversations/${row.id}`}>
+                Ansehen →
+              </Link>
+            </article>
+          ))}
+          {rows.length === 0 && <div className="data-empty">Für diese Filter wurden keine Conversations gefunden.</div>}
         </div>
       </section>
     </main>
