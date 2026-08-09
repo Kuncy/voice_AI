@@ -1,6 +1,7 @@
 import { getWebEnv } from "@heyvera/config";
 import { DrizzleConversationRepository } from "@heyvera/db";
 import { type NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/admin-request";
 import { getWebDatabase } from "@/lib/database";
 import { parseSessionHandle } from "@/lib/session-handle";
 
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const unauthorized = requireAdminApi(request);
+  if (unauthorized) return unauthorized;
+
   const env = getWebEnv();
   const handle = parseSessionHandle(request.cookies.get("heyvera_session")?.value, env.SESSION_SECRET);
   if (!handle) return NextResponse.json({ error: "Ungültige oder abgelaufene Sitzung." }, { status: 401 });

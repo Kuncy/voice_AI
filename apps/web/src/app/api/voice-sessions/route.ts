@@ -4,6 +4,7 @@ import { DrizzleConversationRepository } from "@heyvera/db";
 import { RoomAgentDispatch, RoomConfiguration, TrackSource } from "@livekit/protocol";
 import { AccessToken } from "livekit-server-sdk";
 import { type NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/admin-request";
 import { getWebDatabase } from "@/lib/database";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { createSessionHandle } from "@/lib/session-handle";
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const unauthorized = requireAdminApi(request);
+  if (unauthorized) return unauthorized;
+
   if (request.headers.get("content-length") && request.headers.get("content-length") !== "0") {
     return NextResponse.json({ error: "Der Endpunkt akzeptiert keinen Request-Body." }, { status: 400 });
   }
