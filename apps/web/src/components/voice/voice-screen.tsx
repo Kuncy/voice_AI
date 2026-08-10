@@ -17,7 +17,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { VoiceSphere } from "./voice-sphere";
 
 const statusCopy: Record<VoiceState, { title: string; subtitle: string }> = {
-  idle: { title: "Bereit", subtitle: "Tippe auf das Mikrofon oder sprich einfach los." },
+  idle: { title: "Bereit", subtitle: "Starte ein Gespräch, um mit Vera zu sprechen." },
   connecting: { title: "Verbindung wird aufgebaut", subtitle: "Vera tritt der Session bei." },
   listening: { title: "Vera hört zu", subtitle: "Sprich in normalem Tempo, Pausen sind in Ordnung." },
   thinking: { title: "Vera denkt nach", subtitle: "Die Angaben werden geprüft und strukturiert." },
