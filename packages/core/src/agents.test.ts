@@ -19,6 +19,7 @@ test("prompt keeps the immutable policy before configured instructions", () => {
   assert.match(prompt, /Straße mit Hausnummer/);
   assert.match(prompt, /Postleitzahl und Ort/);
   assert.match(prompt, /Namen der meldenden Person/);
+  assert.match(prompt, /Übernimm bereits genannte Angaben aus dem Gespräch und frage nur fehlende Angaben einzeln ab/);
   assert.match(prompt, /niemals abstrakt nach einer niedrigen, mittleren oder hohen Dringlichkeit/);
   assert.match(prompt, /Terminwünsche, Nebenkostenfragen/);
   assert.match(prompt, /keinen Termin verbindlich buchen/);
