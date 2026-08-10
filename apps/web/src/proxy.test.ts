@@ -6,6 +6,7 @@ import { adminSessionCookie, createAdminSessionToken } from "@/lib/admin-session
 import { authorizeAdminRequest, config } from "./proxy";
 
 const env: AdminEnv = {
+  APP_URL: "https://vera.example.com",
   SESSION_SECRET: "test-secret-that-is-at-least-32-characters",
   ADMIN_USERNAME: "admin",
   ADMIN_PASSWORD_HASH: "scrypt$salt$hash",
@@ -22,10 +23,10 @@ function authenticatedRequest(path: string): NextRequest {
 }
 
 test("protects the voice UI and redirects to login without preserving a subroute", () => {
-  const response = authorizeAdminRequest(new NextRequest("http://localhost/?source=test"), env);
+  const response = authorizeAdminRequest(new NextRequest("https://0.0.0.0:3000/?source=test"), env);
 
   assert.equal(response.status, 307);
-  assert.equal(response.headers.get("location"), "http://localhost/login");
+  assert.equal(response.headers.get("location"), "https://vera.example.com/login");
   assert.ok(config.matcher.includes("/"));
 });
 

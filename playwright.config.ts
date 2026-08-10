@@ -26,6 +26,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
+      APP_URL: baseURL,
       ADMIN_USERNAME: "e2e-admin",
       ADMIN_PASSWORD_HASH: "scrypt$eNDBH8bDUgy9Q9goqAuJpA$IdYAiuLH7lgRoTAO4qyNau1ajvEyOsmNlYHf_Ju1XXc",
       SESSION_SECRET: "e2e-session-secret-with-at-least-32-characters",
