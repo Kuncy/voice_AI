@@ -1,6 +1,6 @@
-# HeyVera
+# Voice AI
 
-HeyVera ist eine deutschsprachige Voice-AI-Demo für die strukturierte Aufnahme von Anliegen in der Immobilienverwaltung. Nutzer sprechen frei mit Vera; die Anwendung erkennt das Anliegen, fragt fehlende Angaben einzeln ab und speichert den Vorgang erst nach einer ausdrücklichen Bestätigung.
+Voice AI ist eine deutschsprachige Demo für die strukturierte Aufnahme von Anliegen in der Immobilienverwaltung. Nutzer sprechen frei mit Vera; die Anwendung erkennt das Anliegen, fragt fehlende Angaben einzeln ab und speichert den Vorgang erst nach einer ausdrücklichen Bestätigung.
 
 Unterstützt werden aktuell:
 
@@ -12,7 +12,7 @@ Das Ziel des MVP ist nicht, eine vollständige Hausverwaltungssoftware zu ersetz
 
 ## Ablauf
 
-![HeyVera – Ablauf der Voice-AI-Demo](docs/assets/heyvera-demo-ablauf.png)
+![Ablauf der Voice-AI-Demo](docs/assets/voice-ai-demo-ablauf.png)
 
 1. Der Browser startet eine kurzlebige LiveKit-Session und überträgt das Mikrofon-Audio.
 2. Deepgram Flux wandelt die Sprache in Text um (STT).
@@ -111,7 +111,7 @@ Diese Variante eignet sich am besten für die Entwicklung mit Hot Reload.
 In `.env.local` muss die Datenbank über den lokal veröffentlichten Port erreichbar sein:
 
 ```dotenv
-DATABASE_URL=postgresql://heyvera:<POSTGRES_PASSWORD>@localhost:5433/heyvera
+DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:5433/<POSTGRES_DB>
 ```
 
 PostgreSQL starten und die Migrationen ausführen:
@@ -141,7 +141,7 @@ Beim ersten Gespräch muss der Browserzugriff auf das Mikrofon erlaubt werden.
 Für diese Variante sollte die Datenbank-URL in `.env.local` auf den Compose-Service zeigen:
 
 ```dotenv
-DATABASE_URL=postgresql://heyvera:<POSTGRES_PASSWORD>@postgres:5432/heyvera
+DATABASE_URL=postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@postgres:5432/<POSTGRES_DB>
 ```
 
 Den vollständigen Stack bauen und starten:
