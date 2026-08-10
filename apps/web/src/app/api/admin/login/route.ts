@@ -1,5 +1,6 @@
 import { getAdminEnv } from "@heyvera/config";
 import { type NextRequest, NextResponse } from "next/server";
+import { appRedirect } from "@/lib/app-redirect";
 import { verifyAdminPassword } from "@/lib/admin-password";
 import { adminSessionCookie, adminSessionTtlMs, createAdminSessionToken } from "@/lib/admin-session-token";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
@@ -20,12 +21,10 @@ export async function POST(request: NextRequest) {
     username !== env.ADMIN_USERNAME ||
     !verifyAdminPassword(password, env.ADMIN_PASSWORD_HASH)
   ) {
-    const url = new URL("/login", request.url);
-    url.searchParams.set("error", "credentials");
-    return NextResponse.redirect(url, 303);
+    return appRedirect(env.APP_URL, "/login?error=credentials", 303);
   }
 
-  const response = NextResponse.redirect(new URL("/", request.url), 303);
+  const response = appRedirect(env.APP_URL, "/", 303);
   response.cookies.set(
     adminSessionCookie,
     createAdminSessionToken(

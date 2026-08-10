@@ -8,7 +8,7 @@ Die Voice-Pipeline verwendet LiveKit für Transport und Orchestrierung, das dire
 
 Voraussetzungen: Node.js 22+, pnpm 11, Docker und ein LiveKit-Cloud-Projekt.
 
-1. `.env.example` nach `.env.local` kopieren und die Provider-Werte, `POSTGRES_PASSWORD` sowie ein mindestens 32 Zeichen langes `SESSION_SECRET` setzen. Mit `pnpm auth:hash '<langes-admin-passwort>'` außerdem `ADMIN_PASSWORD_HASH` erzeugen.
+1. `.env.example` nach `.env.local` kopieren, `APP_URL` auf die öffentliche Origin der Web-App setzen und die Provider-Werte, `POSTGRES_PASSWORD` sowie ein mindestens 32 Zeichen langes `SESSION_SECRET` setzen. Mit `pnpm auth:hash '<langes-admin-passwort>'` außerdem `ADMIN_PASSWORD_HASH` erzeugen.
 2. `pnpm install` ausführen.
 3. PostgreSQL und die Migration mit `./scripts/compose-local.sh up -d postgres migrate` starten.
 4. Für Prozesse auf dem Host in `.env.local` `DATABASE_URL=postgresql://heyvera:<passwort>@localhost:5433/heyvera` setzen; alternativ Web und Agent vollständig über Compose starten.
@@ -42,7 +42,7 @@ Das Repository wird als Docker-Compose-Service-Stack deployt. In Coolify:
 
 1. Git-Repository als neue Docker-Compose-Ressource auswählen.
 2. Nur dem Service `web` eine HTTPS-Domain auf Container-Port 3000 zuweisen.
-3. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SESSION_SECRET`, `ADMIN_PASSWORD_HASH`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` und `POSTGRES_PASSWORD` als Runtime-Secrets setzen. `ADMIN_USERNAME`, `LIVEKIT_AGENT_NAME`, `POSTGRES_DB` und `POSTGRES_USER` sind optional. `ADMIN_PASSWORD_HASH` wird mit `pnpm auth:hash '<passwort>'` erzeugt.
+3. `APP_URL` auf die öffentliche HTTPS-Origin setzen. `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `SESSION_SECRET`, `ADMIN_PASSWORD_HASH`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` und `POSTGRES_PASSWORD` als Runtime-Secrets setzen. `ADMIN_USERNAME`, `LIVEKIT_AGENT_NAME`, `POSTGRES_DB` und `POSTGRES_USER` sind optional. `ADMIN_PASSWORD_HASH` wird mit `pnpm auth:hash '<passwort>'` erzeugt.
 4. Den Agent-Service nicht öffentlich exponieren. Sein interner LiveKit-Healthcheck läuft auf Port 8081.
 5. Das benannte Volume `postgres_data` sichern und in Coolify geplante PostgreSQL-Backups auf S3-kompatiblen Storage konfigurieren.
 6. Für Production ein eigenes LiveKit-Projekt verwenden. Preview- und lokale Worker dürfen nicht dieselben Credentials verwenden.

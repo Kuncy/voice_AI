@@ -18,6 +18,10 @@ const webEnvSchema = liveKitEnvSchema.extend({
 });
 
 const adminEnvSchema = z.object({
+  APP_URL: z
+    .string()
+    .url()
+    .transform((value) => new URL(value).origin),
   SESSION_SECRET: z.string().min(32),
   ADMIN_USERNAME: z.string().min(1).default("admin"),
   ADMIN_PASSWORD_HASH: z.string().regex(/^scrypt\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/),

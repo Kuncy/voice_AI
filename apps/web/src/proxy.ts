@@ -1,5 +1,6 @@
 import { getAdminEnv } from "@heyvera/config";
 import { type NextRequest, NextResponse } from "next/server";
+import { appRedirect } from "@/lib/app-redirect";
 import { hasAdminSession } from "@/lib/admin-request";
 
 export function authorizeAdminRequest(request: NextRequest, env = getAdminEnv()): NextResponse {
@@ -9,8 +10,7 @@ export function authorizeAdminRequest(request: NextRequest, env = getAdminEnv())
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
 
-  const loginUrl = new URL("/login", request.url);
-  return NextResponse.redirect(loginUrl);
+  return appRedirect(env.APP_URL, "/login");
 }
 
 export function proxy(request: NextRequest) {

@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalPassThroughEnv": [
+    "APP_URL",
     "LIVEKIT_URL",
     "LIVEKIT_API_KEY",
     "LIVEKIT_API_SECRET",
